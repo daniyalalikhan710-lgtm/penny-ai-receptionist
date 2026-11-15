@@ -224,7 +224,30 @@ async function video(browser: Browser): Promise<void> {
   rmSync(dir, { recursive: true, force: true });
 }
 
-const FLOWS: Record<string, (browser: Browser) => Promise<void>> = { golden, emergency, citations, spanish, takeover, owner, mobile, video };
+/** The link-preview image (1200x630): the moment the booking lands on the board. */
+async function og(browser: Browser): Promise<void> {
+  console.log("link-preview image");
+  const { page, context } = await open(browser, { width: 1200, height: 630 });
+  await page.getByRole("button", { name: /My water heater is leaking/ }).click();
+  await page.getByTestId("card-slots").waitFor({ timeout: 45_000 });
+  await settled(page);
+  await page.getByTestId("slot-option").first().click();
+  await page.getByTestId("card-details").waitFor({ timeout: 30_000 });
+  await settled(page);
+  await page.getByTestId("details-submit").click();
+  await page.getByTestId("card-checkout").waitFor({ timeout: 30_000 });
+  await settled(page);
+  await page.getByTestId("pay-button").click();
+  await page.getByTestId("card-confirmation").waitFor({ timeout: 30_000 });
+  await settled(page);
+  await page.waitForTimeout(1500);
+  await page.getByTestId("card-confirmation").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: path.resolve("src/app/opengraph-image.jpg"), type: "jpeg", quality: 86, scale: "css" });
+  console.log("  saved src/app/opengraph-image.jpg");
+  await context.close();
+}
+
+const FLOWS: Record<string, (browser: Browser) => Promise<void>> = { golden, emergency, citations, spanish, takeover, owner, mobile, og, video };
 
 async function main(): Promise<void> {
   mkdirSync(OUT, { recursive: true });

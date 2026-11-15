@@ -1,6 +1,6 @@
 # Penny: an AI receptionist for a home-services business
 
-Penny answers a plumbing and heating company's customers the moment they write in. She looks at their photo, quotes from the real price book, books a technician, takes the deposit and puts the job on the dispatch board, while the owner watches it happen.
+Penny answers a plumbing and heating company's customers the moment they write in. She looks at their photo, quotes from the real price book, books a technician, takes the diagnostic fee and puts the job on the dispatch board, while the owner watches it happen.
 
 **Live demo:** (link coming)
 
@@ -17,7 +17,7 @@ The demo is a split screen. On the left is Copperline's website with Penny's cha
 | | |
 |---|---|
 | **Photo diagnosis** | Send a photo and Penny returns a diagnosis card: what she sees, how urgent it is, safe things to do right now, and a price range from the price book. |
-| **Booking, end to end** | Real availability as a tappable slot picker, a details form, a deposit checkout and a confirmation with booking code, calendar file and SMS preview. |
+| **Booking, end to end** | Real availability as a tappable slot picker, a details form, a checkout for the diagnostic fee and a confirmation with booking code, calendar file and SMS preview. |
 | **Grounded answers with citations** | Policy answers come from eight company documents. Each claim carries a chip that opens the source with the cited passage highlighted. |
 | **Emergency triage** | Gas smell, carbon monoxide, sparking or flooding: safety instructions first, a red alert on the dashboard, and an immediate callback offer. |
 | **Human takeover** | The owner clicks **Take over** on any conversation, replies from the dashboard, then hands back. Penny knows what was said. |
@@ -169,7 +169,7 @@ Not built yet:
 - A guided four-step tour for first-time visitors.
 - Two-tab sync, so the owner view can sit in a second window.
 - Voice input through the Web Speech API.
-- Real integrations in place of the simulated ones: Stripe for the deposit, Twilio for texts, a calendar or field-service system for the board.
+- Real integrations in place of the simulated ones: Stripe for the diagnostic fee, Twilio for texts, a calendar or field-service system for the board.
 
 ## Credits and license
 

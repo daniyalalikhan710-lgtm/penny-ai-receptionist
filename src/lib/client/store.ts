@@ -84,6 +84,10 @@ interface DemoRuntime {
   selectedLeadId: string | null;
   boardDay: DayStr | null;
   citation: { docId: string; start: number; end: number; quote: string } | null;
+  /** Dashboard changes that happened while the owner view was not on screen. */
+  ownerUnseen: number;
+  /** Staff replies that arrived while the customer view was not on screen. */
+  customerUnseen: number;
 }
 
 interface DemoActions {
@@ -200,7 +204,14 @@ const initialRuntime: DemoRuntime = {
   selectedLeadId: null,
   boardDay: null,
   citation: null,
+  ownerUnseen: 0,
+  customerUnseen: 0,
 };
+
+/** True when only one pane fits on screen (the tabbed, mobile layout). */
+function singlePane(): boolean {
+  return typeof window !== "undefined" && !window.matchMedia("(min-width: 1024px)").matches;
+}
 
 async function* readNdjson(response: Response): AsyncGenerator<StreamEvent> {
   if (!response.body) return;
@@ -242,7 +253,16 @@ export const useDemo = create<DemoStore>()(
         if (patches.length === 0) return;
         const s = get();
         const next = applyPatches({ jobs: s.jobs, lead: s.lead, outbox: s.outbox, alerts: s.alerts }, patches);
-        set({ jobs: next.jobs, lead: next.lead, outbox: next.outbox, alerts: next.alerts });
+        // Something the owner would care about (not just a summary refresh)?
+        const notable = patches.some((p) => p.op === "job.add" || p.op === "job.update" || p.op === "alert.raise" || p.op === "message.log");
+        const ownerHidden = s.view === "customer" || (s.view === "split" && singlePane());
+        set({
+          jobs: next.jobs,
+          lead: next.lead,
+          outbox: next.outbox,
+          alerts: next.alerts,
+          ownerUnseen: notable && ownerHidden ? s.ownerUnseen + 1 : s.ownerUnseen,
+        });
       };
 
       const updateAssistant = (id: string, turn: AssistantTurn, extra: Partial<Extract<ChatMessage, { role: "assistant" }>> = {}) => {
@@ -342,7 +362,8 @@ export const useDemo = create<DemoStore>()(
         set((s) => ({
           sending: false,
           cardState: bookingFailed ? { ...s.cardState, ...unlock } : s.cardState,
-          responseMs: firstMs !== null && turn.stopReason !== "rejected" ? [...s.responseMs, firstMs].slice(-40) : s.responseMs,
+          // The KPI is a median over conversations, so this conversation counts once.
+          responseMs: firstMs !== null && turn.stopReason !== "rejected" && s.responseMs.length === 0 ? [firstMs] : s.responseMs,
         }));
       };
 
@@ -380,7 +401,12 @@ export const useDemo = create<DemoStore>()(
           set({ ...freshData(now(), { view: s.view, xray: s.xray }), ...initialRuntime, ready: true, mode: s.mode, model: s.model });
         },
 
-        setView: (view) => set({ view }),
+        setView: (view) =>
+          set((s) => ({
+            view,
+            ownerUnseen: view === "customer" ? s.ownerUnseen : 0,
+            customerUnseen: view === "owner" ? s.customerUnseen : 0,
+          })),
         setXray: (xray) => set({ xray }),
         setChatOpen: (chatOpen) => set({ chatOpen }),
         setStatus: (mode, model) => set({ mode, model }),
@@ -459,6 +485,8 @@ export const useDemo = create<DemoStore>()(
               cardState: { ...cur.cardState, [toolId]: { ...cur.cardState[toolId], paid: true } },
               flights: from ? [...cur.flights, { id: uid("f"), jobCode: bookingCode, from }] : cur.flights,
               justLanded: from ? cur.justLanded : [...cur.justLanded, bookingCode],
+              // Show the day the job landed on, with or without the flight animation.
+              boardDay: cur.jobs.find((j) => j.code === bookingCode)?.date ?? cur.boardDay,
             }));
             // The checkout card can be paid while Penny is still typing the line
             // under it; the confirmation turn waits for that reply to finish.
@@ -521,6 +549,7 @@ export const useDemo = create<DemoStore>()(
           if (leadId === LIVE_LEAD_ID) {
             set((s) => ({
               messages: [...s.messages, { id: uid("st"), role: "staff", text: clean, name: OWNER.name, atMin: clock.nowMinutes }],
+              customerUnseen: s.view === "owner" ? s.customerUnseen + 1 : s.customerUnseen,
             }));
           } else {
             set((s) => ({

@@ -133,8 +133,8 @@ export function tr(lang: Lang, key: StringKey): string {
 }
 
 const URGENCY: Record<Lang, Record<Urgency, string>> = {
-  en: { routine: "Routine", soon: "This week", urgent: "Today", emergency: "Emergency" },
-  es: { routine: "Rutina", soon: "Esta semana", urgent: "Hoy", emergency: "Emergencia" },
+  en: { routine: "Routine", soon: "This week", urgent: "Urgent", emergency: "Emergency" },
+  es: { routine: "Rutina", soon: "Esta semana", urgent: "Urgente", emergency: "Emergencia" },
 };
 
 export function urgencyLabel(urgency: Urgency, lang: Lang = "en"): string {

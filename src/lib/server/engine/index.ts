@@ -87,6 +87,13 @@ export function checkCaps(input: TurnInput): Rejection | null {
   }
   // Photos are counted across the whole transcript on every request: each one
   // is re-sent to the model on every step, whatever the newest message is.
+  const uploads = messages.filter((m) => m.role === "user" && m.image?.kind === "upload").length;
+  if (uploads > CAPS.maxUploadsPerConversation) {
+    return {
+      code: "image_cap",
+      message: `Demo limit reached: ${CAPS.maxUploadsPerConversation} of your own photos per conversation. Use “Reset demo” to start again.`,
+    };
+  }
   if (messages.filter((m) => m.role === "user" && m.image).length > CAPS.maxImagesPerConversation) {
     return {
       code: "image_cap",

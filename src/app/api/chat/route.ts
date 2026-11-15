@@ -35,7 +35,7 @@ export async function POST(request: Request): Promise<Response> {
   if (crossSite) return json(crossSite.status, crossSite.reason);
 
   // Cheapest checks first: the limiter runs before any body is read or parsed.
-  const rate = await checkRate(clientIp(request.headers));
+  const rate = await checkRate(clientIp(request.headers), Date.now(), { daily: resolveMode() === "live" });
   if (!rate.ok) {
     return noticeStream(429, {
       type: "notice",
@@ -62,7 +62,7 @@ export async function POST(request: Request): Promise<Response> {
     return json(400, "Request body must be JSON.");
   }
   const parsed = chatRequestSchema.safeParse(body);
-  if (!parsed.success) return json(400, "Request did not match the expected shape.");
+  if (!parsed.success) return json(400, "That didn't go through. Please check what you entered and try again.");
   const input = parsed.data;
 
   // The visitor's clock is only trusted within a day of the server's.

@@ -120,11 +120,20 @@ describe("security review fixes", () => {
   const photo = (): WireMessage => ({ role: "user", text: "photo", sentAt: "t", image: sample });
 
   it("counts photos across the whole transcript even when the newest message has none", () => {
-    const messages: WireMessage[] = [photo(), photo(), photo(), photo(), user("and now just text")];
-    expect(checkCaps({ messages, state: state(), clock })?.code).toBe("image_cap");
+    const many = Array.from({ length: CAPS.maxImagesPerConversation + 1 }, photo);
+    expect(checkCaps({ messages: [...many, user("and now just text")], state: state(), clock })?.code).toBe("image_cap");
     const event: WireMessage = { role: "event", sentAt: "t", event: { kind: "handback" } };
-    expect(checkCaps({ messages: [photo(), photo(), photo(), photo(), event], state: state(), clock })?.code).toBe("image_cap");
-    expect(checkCaps({ messages: [photo(), photo(), photo(), user("text")], state: state(), clock })).toBeNull();
+    expect(checkCaps({ messages: [...many, event], state: state(), clock })?.code).toBe("image_cap");
+    // Every bundled sample can be tried once in a single conversation.
+    expect(checkCaps({ messages: [...many.slice(0, 6), user("text")], state: state(), clock })).toBeNull();
+  });
+
+  it("caps the visitor's own uploads lower than sample photos, since each is re-sent every turn", () => {
+    const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+    const upload = (): WireMessage => ({ role: "user", text: "mine", sentAt: "t", image: { kind: "upload", mediaType: "image/png", dataBase64: png } });
+    const tooMany = Array.from({ length: CAPS.maxUploadsPerConversation + 1 }, upload);
+    expect(checkCaps({ messages: [...tooMany, user("text")], state: state(), clock })?.code).toBe("image_cap");
+    expect(checkCaps({ messages: [...tooMany.slice(0, 3), user("text")], state: state(), clock })).toBeNull();
   });
 
   it("measures the transcript in bytes, so dense scripts cannot slip under the cap", () => {

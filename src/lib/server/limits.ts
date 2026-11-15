@@ -18,7 +18,10 @@ export const CAPS = {
   /** Total wire messages accepted in one request. */
   maxWireMessages: 140,
   maxMessageChars: envInt("PENNY_MAX_MESSAGE_CHARS", 1500),
-  maxImagesPerConversation: envInt("PENNY_MAX_IMAGES", 3),
+  /** Photos per conversation: enough to try every bundled sample once. */
+  maxImagesPerConversation: envInt("PENNY_MAX_IMAGES", 6),
+  /** Of those, how many may be the visitor's own uploads (each is re-sent every turn). */
+  maxUploadsPerConversation: envInt("PENNY_MAX_UPLOADS", 3),
   /** Decoded bytes of one uploaded image (it is resized client-side first). */
   maxImageBytes: 900_000,
   /**
@@ -132,13 +135,16 @@ async function hit(key: string, windowSec: number, now: number): Promise<number>
  * Best-effort per-IP limiter: Upstash Redis when its env vars are present,
  * in-memory otherwise (per server instance, which is fine for a demo).
  */
-export async function checkRate(ip: string, now: number = Date.now()): Promise<RateResult> {
+export async function checkRate(ip: string, now: number = Date.now(), options: { daily?: boolean } = {}): Promise<RateResult> {
   const minuteWindow = Math.floor(now / 60_000);
   const dayWindow = Math.floor(now / 86_400_000);
   const perMinute = await hit(`penny:rl:m:${ip}:${minuteWindow}`, 60, now);
   if (perMinute > RATE.perMinute) {
     return { ok: false, retryAfterSec: 60 - Math.floor((now % 60_000) / 1000), scope: "minute" };
   }
+  // The daily cap exists to protect the API bill. Replay turns cost nothing,
+  // so a whole office behind one address is not locked out of the free demo.
+  if (options.daily === false) return { ok: true, retryAfterSec: 0, scope: null };
   const perDay = await hit(`penny:rl:d:${ip}:${dayWindow}`, 86_400, now);
   if (perDay > RATE.perDay) return { ok: false, retryAfterSec: 3600, scope: "day" };
   return { ok: true, retryAfterSec: 0, scope: null };

@@ -19,7 +19,7 @@ function estimatePrefixTokens(): number {
 
 const FEATURES = [
   { icon: Camera, title: "Diagnoses from a photo", text: "A customer snaps the problem. Penny describes what she sees, how urgent it is, what to do right now, and the price range for the fix." },
-  { icon: CalendarCheck, title: "Books the job end to end", text: "Real availability, a details form, a deposit checkout and a confirmation text. The job lands on the dispatch board without anyone picking up a phone." },
+  { icon: CalendarCheck, title: "Books the job end to end", text: "Real availability, a details form, a checkout for the diagnostic fee and a confirmation text. The job lands on the dispatch board without anyone picking up a phone." },
   { icon: BookOpen, title: "Never makes up a price or policy", text: "Prices come from the price book and policies from the company's own documents. Every policy answer links to the exact passage it came from." },
   { icon: ShieldAlert, title: "Puts safety first", text: "Gas smell, carbon monoxide, sparking or flooding: Penny leads with getting people safe, alerts the team in red, and offers an immediate callback." },
   { icon: UserRoundCheck, title: "Hands over to a person", text: "The owner can step into any conversation with one click. Penny pauses, then picks up again knowing exactly what was said." },
@@ -38,7 +38,10 @@ const STACK = [
 function Shot({ src, alt, caption }: { src: string; alt: string; caption: string }) {
   return (
     <figure className="overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-sm">
-      <Image src={src} alt={alt} width={1440} height={900} className="h-auto w-full" sizes="(min-width: 1024px) 960px, 100vw" />
+      <a href={src} target="_blank" rel="noreferrer" title="Open the full-size screenshot" className="block">
+        <Image src={src} alt={alt} width={1440} height={900} className="h-auto w-full" sizes="(min-width: 1024px) 960px, 100vw" />
+        <span className="sr-only">(opens the full-size screenshot in a new tab)</span>
+      </a>
       <figcaption className="border-t border-ink-100 px-4 py-2.5 text-[13px] leading-snug text-ink-600">{caption}</figcaption>
     </figure>
   );
@@ -52,7 +55,7 @@ function Diagram() {
     <svg viewBox="0 0 880 380" role="img" aria-labelledby="arch-title arch-desc" className="h-auto w-full">
       <title id="arch-title">Architecture of the Penny demo</title>
       <desc id="arch-desc">
-        The browser holds the chat widget, the owner dashboard and the sandbox state. It sends each turn to one server route, which runs either the live Claude engine or the scripted replay engine. Both call the same server tools, which read the price book, the calendar logic and the company documents, and return cards and state patches that update both panes.
+        The browser holds the chat widget, the owner dashboard and the sandbox state. It sends each turn to one server route, which runs either the live Claude engine or the scripted replay engine. Only the live engine calls the Claude API. Both engines call the same server tools, which read the price book, the calendar logic and the company documents, and return cards and state patches that update both panes.
       </desc>
       <defs>
         <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -79,12 +82,12 @@ function Diagram() {
       <rect x="350" y="62" width="210" height="54" rx="10" className="fill-ink-800 stroke-ink-600" />
       <text x="366" y="85" className="fill-cream text-[13px] font-semibold">Caps and rate limits</text>
       <text x="366" y="103" className="fill-ink-300 text-[11px]">zod validation of every payload</text>
-      <rect x="350" y="130" width="100" height="70" rx="10" className="fill-copper-600" />
-      <text x="364" y="158" className="fill-white text-[13px] font-semibold">Live engine</text>
-      <text x="364" y="176" className="fill-copper-100 text-[11px]">Claude tool loop</text>
-      <rect x="460" y="130" width="100" height="70" rx="10" className="fill-ink-700 stroke-ink-500" />
-      <text x="474" y="158" className="fill-cream text-[13px] font-semibold">Replay</text>
-      <text x="474" y="176" className="fill-ink-300 text-[11px]">scripted, no key</text>
+      <rect x="350" y="130" width="100" height="70" rx="10" className="fill-ink-700 stroke-ink-500" />
+      <text x="364" y="158" className="fill-cream text-[13px] font-semibold">Replay</text>
+      <text x="364" y="176" className="fill-ink-300 text-[11px]">scripted, no key</text>
+      <rect x="460" y="130" width="100" height="70" rx="10" className="fill-copper-600" />
+      <text x="474" y="158" className="fill-white text-[13px] font-semibold">Live engine</text>
+      <text x="474" y="176" className="fill-copper-100 text-[11px]">Claude tool loop</text>
       <rect x="350" y="222" width="210" height="62" rx="10" className="fill-cream" />
       <text x="366" y="248" className={label}>Tools (same for both engines)</text>
       <text x="366" y="268" className={small}>estimate, slots, booking, emergency…</text>
@@ -113,7 +116,8 @@ function Diagram() {
       <path d="M560 253h84" className="stroke-copper-600" strokeWidth="2" markerEnd="url(#arrow)" markerStart="url(#arrow)" fill="none" />
       <path d="M400 200v16" className="stroke-copper-300" strokeWidth="2" markerEnd="url(#arrow)" fill="none" />
       <path d="M510 200v16" className="stroke-copper-300" strokeWidth="2" markerEnd="url(#arrow)" fill="none" />
-      <path d="M580 165h40a20 20 0 0 1 20 20v120a10 10 0 0 0 10 10h14" className="stroke-copper-600" strokeWidth="2" markerEnd="url(#arrow)" fill="none" strokeDasharray="5 4" />
+      <path d="M560 165h60a20 20 0 0 1 20 20v120a10 10 0 0 0 10 10h14" className="stroke-copper-600" strokeWidth="2" markerEnd="url(#arrow)" fill="none" strokeDasharray="5 4" />
+      <text x="590" y="158" className={small}>live only</text>
     </svg>
   );
 }
@@ -138,7 +142,7 @@ export default function CaseStudy() {
             An AI receptionist that books the job while you&rsquo;re under a sink.
           </h1>
           <p className="mt-5 max-w-2xl text-[17px] leading-relaxed text-ink-200">
-            Penny answers a home-services company&rsquo;s customers the moment they write in: she looks at their photo, quotes from the real price book, books a technician, takes the deposit, and puts the job on the dispatch board. This page explains what she does and how she is built.
+            Penny answers a home-services company&rsquo;s customers the moment they write in: she looks at their photo, quotes from the real price book, books a technician, takes the diagnostic fee, and puts the job on the dispatch board. This page explains what she does and how she is built.
           </p>
           <Link href="/" className="mt-7 inline-flex h-11 items-center gap-2 rounded-xl bg-copper-500 px-5 text-[14.5px] font-semibold text-ink-950 hover:bg-copper-400">
             Try the live demo <ArrowRight className="size-4" aria-hidden />

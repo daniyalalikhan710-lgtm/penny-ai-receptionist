@@ -383,6 +383,22 @@ function CheckoutCard({ card, toolId, lang }: CardProps<"checkout">) {
       setError(lang === "es" ? "Esta demostración solo acepta la tarjeta de prueba 4242 4242 4242 4242. No use tarjetas reales." : "This demo only accepts the test card 4242 4242 4242 4242. No real cards, please.");
       return;
     }
+    const expiry = form.expiry.trim().match(/^(\d{2})\s*\/\s*(\d{2})$/);
+    const month = expiry ? Number(expiry[1]) : 0;
+    const now = new Date();
+    const expired = !expiry || month < 1 || month > 12 || 2000 + Number(expiry[2]) < now.getFullYear() || (2000 + Number(expiry[2]) === now.getFullYear() && month < now.getMonth() + 1);
+    if (expired) {
+      setError(lang === "es" ? "Revise la fecha de vencimiento (MM/AA): parece vencida o incompleta." : "Check the expiry date (MM/YY): it looks expired or incomplete.");
+      return;
+    }
+    if (!/^\d{3,4}$/.test(form.cvc.trim())) {
+      setError(lang === "es" ? "El código de seguridad debe tener 3 o 4 dígitos." : "The security code should be 3 or 4 digits.");
+      return;
+    }
+    if (!form.name.trim()) {
+      setError(lang === "es" ? "Escriba el nombre que aparece en la tarjeta." : "Please enter the name on the card.");
+      return;
+    }
     setBusy(true);
     setError(null);
     // The job card flies from here to the dispatch board when both are visible.
@@ -464,7 +480,7 @@ function icsHref(booking: BookingView): string {
     "PRODID:-//Copperline//Penny demo//EN",
     "BEGIN:VEVENT",
     `UID:${booking.code}@copperline.demo`,
-    `DTSTAMP:${icsLocal(booking.date, 0)}Z`,
+    `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "")}`,
     `DTSTART:${icsLocal(booking.date, booking.startMin)}`,
     `DTEND:${icsLocal(booking.date, booking.startMin + booking.durationMin)}`,
     `SUMMARY:${esc(`${COMPANY.short}: ${booking.serviceName} (${booking.code})`)}`,
@@ -563,11 +579,17 @@ function EmergencyCard({ card, toolId, lang }: CardProps<"emergency">) {
   const sendEvent = useDemo((s) => s.sendEvent);
   const [open, setOpen] = useState(false);
   const [phone, setPhone] = useState(DEMO_CUSTOMER.phone);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const phoneId = useId();
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (sent || sending || !/^[0-9+() .-]{7,30}$/.test(phone.trim()) || phone.replace(/\D/g, "").length < 7) return;
+    if (sent || sending) return;
+    if (!/^[0-9+() .-]{7,30}$/.test(phone.trim()) || phone.replace(/\D/g, "").length < 7) {
+      setPhoneError(lang === "es" ? "Escriba un número de teléfono al que podamos llamarle." : "Enter a phone number we can call you on.");
+      return;
+    }
+    setPhoneError(null);
     setCardState(toolId, { callbackSent: true });
     void sendEvent({ kind: "callback_requested", phone: phone.trim() });
   };
@@ -616,7 +638,7 @@ function EmergencyCard({ card, toolId, lang }: CardProps<"emergency">) {
             <Check className="size-4" aria-hidden /> {tr(lang, "callbackRequested")}
           </p>
         ) : open ? (
-          <form onSubmit={submit} className="mt-2 flex items-end gap-2">
+          <form onSubmit={submit} className="mt-2 flex flex-wrap items-end gap-2">
             <div className="min-w-0 flex-1">
               <label htmlFor={phoneId} className="mb-1 block text-[11px] font-semibold text-ink-600">
                 {tr(lang, "callbackNumber")}
@@ -638,6 +660,11 @@ function EmergencyCard({ card, toolId, lang }: CardProps<"emergency">) {
             >
               <PhoneCall className="size-4" aria-hidden /> {tr(lang, "callMe")}
             </button>
+            {phoneError ? (
+              <p role="alert" className="w-full text-[12px] font-medium text-red-700">
+                {phoneError}
+              </p>
+            ) : null}
           </form>
         ) : (
           <button

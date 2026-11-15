@@ -19,7 +19,7 @@ export async function POST(request: Request): Promise<Response> {
   const crossSite = crossSiteProblem(request);
   if (crossSite) return json(crossSite.status, { ok: false, reason: crossSite.reason });
 
-  const rate = await checkRate(clientIp(request.headers));
+  const rate = await checkRate(clientIp(request.headers), Date.now(), { daily: false });
   if (!rate.ok) return json(429, { ok: false, reason: "Demo limit reached. Give it a minute and try again." });
 
   let body: unknown;
@@ -31,16 +31,21 @@ export async function POST(request: Request): Promise<Response> {
     return json(400, { ok: false, reason: "Request body must be JSON." });
   }
   const parsed = payRequestSchema.safeParse(body);
-  if (!parsed.success) return json(400, { ok: false, reason: "Request did not match the expected shape." });
+  if (!parsed.success) return json(400, { ok: false, reason: "That didn't go through. Please check the card details and try again." });
   const input = parsed.data;
   if (Math.abs(diffDays(input.clock.today, localDayStr(new Date()))) > 1) {
     return json(400, { ok: false, reason: "Your device clock looks wrong. Reload the page and try again." });
   }
   if (input.state.jobs.some((job) => !techById(job.techId))) return json(400, { ok: false, reason: "Unknown technician in state." });
 
-  if (!/^\d{2}\s*\/\s*\d{2}$/.test(input.card.expiry.trim()) || !/^\d{3,4}$/.test(input.card.cvc.trim())) {
+  const expiry = input.card.expiry.trim().match(/^(\d{2})\s*\/\s*(\d{2})$/);
+  const month = expiry ? Number(expiry[1]) : 0;
+  const year = expiry ? 2000 + Number(expiry[2]) : 0;
+  const [thisYear, thisMonth] = input.clock.today.split("-").map(Number);
+  if (!expiry || month < 1 || month > 12 || year < thisYear || (year === thisYear && month < thisMonth) || !/^\d{3,4}$/.test(input.card.cvc.trim())) {
     return json(200, { ok: false, reason: "Check the expiry date (MM/YY) and security code." });
   }
+  if (!input.card.name.trim()) return json(200, { ok: false, reason: "Please enter the name on the card." });
 
   const result = confirmPayment(input.bookingCode, input.card.number, {
     state: { jobs: input.state.jobs, lead: { ...input.state.lead, id: LIVE_LEAD_ID, live: true }, outbox: [], alerts: [] },

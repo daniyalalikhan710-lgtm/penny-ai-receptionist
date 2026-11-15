@@ -17,9 +17,9 @@ const SERVICES = [
 ];
 
 const REVIEWS = [
-  { name: "Renee C.", town: "Millbrook", text: "Sink backed up at 7 am. I chatted with Penny, sent a photo, and Marcus was here by 10. Price was exactly what I was quoted." },
-  { name: "Aisha B.", town: "Cedar Flats", text: "Furnace kept shutting off. Booked in two minutes without waiting on hold, and Priya had it fixed that afternoon." },
-  { name: "Tom W.", town: "Alder Heights", text: "Straight answers on price before anyone came out. No surprises on the invoice. That's all I want." },
+  { name: "Marisol G.", town: "Millbrook", text: "Sink backed up before work. I chatted with Penny, sent a photo, and Marcus was here the same morning. Price was exactly what I was quoted." },
+  { name: "Dan K.", town: "Cedar Flats", text: "Furnace kept shutting off. Booked in two minutes without waiting on hold, and Priya had it fixed that afternoon." },
+  { name: "Priscilla W.", town: "Alder Heights", text: "Straight answers on price before anyone came out. No surprises on the invoice. That's all I want." },
 ];
 
 const TOWNS = ["Riverbend", "Alder Heights", "Copper Hill", "Millbrook", "Fairhaven", "Stonebridge", "Cedar Flats", "Larkspur", "Quarry Park", "Willow Landing"];
@@ -49,7 +49,7 @@ export function CopperlineSite({ onOpenChat }: { onOpenChat: () => void }) {
           <a href="#reviews" className="hover:text-copper-700">Reviews</a>
           <a href="#area" className="hover:text-copper-700">Service area</a>
         </nav>
-        <a href="#area" className="flex items-center gap-1.5 rounded-full bg-ink-900 px-3.5 py-2 text-[13px] font-semibold text-cream">
+        <a href="tel:+15550100100" className="flex items-center gap-1.5 rounded-full bg-ink-900 px-3.5 py-2 text-[13px] font-semibold text-cream">
           <Phone className="size-3.5" aria-hidden /> {COMPANY.phone}
         </a>
       </header>

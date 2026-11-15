@@ -52,6 +52,8 @@ function TopBar({ wide, view }: { wide: boolean; view: ViewMode }) {
   const mode = useDemo((s) => s.mode);
   const model = useDemo((s) => s.model);
   const hasAlert = useDemo((s) => s.alerts.some((a) => !a.acknowledged));
+  const ownerUnseen = useDemo((s) => s.ownerUnseen);
+  const customerUnseen = useDemo((s) => s.customerUnseen);
   const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
@@ -81,13 +83,33 @@ function TopBar({ wide, view }: { wide: boolean; view: ViewMode }) {
               data-testid={`view-${id}`}
               onClick={() => setView(id)}
               className={cn(
-                "relative flex h-8 items-center gap-1.5 rounded-[10px] px-2.5 text-[12.5px] font-semibold transition sm:px-3",
+                "tap relative flex h-8 items-center gap-1.5 rounded-[10px] px-2.5 text-[12.5px] font-semibold transition sm:px-3",
                 selected ? "bg-cream text-ink-900 shadow" : "text-ink-200 hover:text-cream",
               )}
             >
               <Icon className="size-4" aria-hidden />
               {label}
-              {id === "owner" && hasAlert && !selected ? <span className="absolute top-1 right-1 size-2 rounded-full bg-red-500 ring-2 ring-ink-800" aria-label="Emergency alert" /> : null}
+              {id === "owner" && !selected && (hasAlert || ownerUnseen > 0) ? (
+                <span
+                  data-testid="owner-badge"
+                  className={cn(
+                    "absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none font-bold text-white ring-2 ring-ink-800",
+                    hasAlert ? "bg-red-500" : "bg-copper-500",
+                  )}
+                  aria-label={hasAlert ? "Emergency alert on the dashboard" : `${ownerUnseen} new on the dashboard`}
+                >
+                  {hasAlert ? "!" : ownerUnseen}
+                </span>
+              ) : null}
+              {id === "customer" && !selected && customerUnseen > 0 ? (
+                <span
+                  data-testid="customer-badge"
+                  className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-copper-500 px-1 text-[10px] leading-none font-bold text-white ring-2 ring-ink-800"
+                  aria-label={`${customerUnseen} new in the chat`}
+                >
+                  {customerUnseen}
+                </span>
+              ) : null}
             </button>
           );
         })}
@@ -107,10 +129,12 @@ function TopBar({ wide, view }: { wide: boolean; view: ViewMode }) {
         ) : null}
         <Link
           href="/case-study"
-          className="hidden h-8 items-center gap-1.5 rounded-lg px-2 text-[12.5px] font-semibold text-ink-200 ring-1 ring-ink-600 transition hover:bg-ink-800 xl:flex"
+          title="How Penny works and what she costs to run"
+          aria-label="Case study"
+          className="tap flex h-8 items-center gap-1.5 rounded-lg px-2 text-[12.5px] font-semibold text-ink-200 ring-1 ring-ink-600 transition hover:bg-ink-800"
         >
           <FileText className="size-4" aria-hidden />
-          Case study
+          <span className="hidden xl:inline">Case study</span>
         </Link>
         <button
           type="button"
@@ -119,7 +143,7 @@ function TopBar({ wide, view }: { wide: boolean; view: ViewMode }) {
           onClick={() => setXray(!xray)}
           title="X-ray: see every tool call, citation, token and cent"
           className={cn(
-            "flex h-8 items-center gap-1.5 rounded-lg px-2 text-[12.5px] font-semibold transition",
+            "tap flex h-8 items-center gap-1.5 rounded-lg px-2 text-[12.5px] font-semibold transition",
             xray ? "bg-copper-500 text-ink-950" : "text-ink-200 ring-1 ring-ink-600 hover:bg-ink-800",
           )}
         >
@@ -137,7 +161,7 @@ function TopBar({ wide, view }: { wide: boolean; view: ViewMode }) {
           }}
           title="Start over with a fresh sandbox"
           className={cn(
-            "flex h-8 items-center gap-1.5 rounded-lg px-2 text-[12.5px] font-semibold transition",
+            "tap flex h-8 items-center gap-1.5 rounded-lg px-2 text-[12.5px] font-semibold transition",
             confirming ? "bg-red-600 text-white" : "text-ink-200 ring-1 ring-ink-600 hover:bg-ink-800",
           )}
         >
@@ -180,7 +204,7 @@ function CustomerPane() {
           <CopperlineSite onOpenChat={() => setChatOpen(true)} />
         </div>
         {chatOpen ? (
-          <div className="absolute inset-0 z-20 flex flex-col @md:inset-auto @md:right-4 @md:bottom-4 @md:h-[min(680px,calc(100%-2rem))] @md:w-[390px] @md:overflow-hidden @md:rounded-2xl @md:shadow-[0_24px_60px_-12px_rgb(11_18_32/0.45)] @md:ring-1 @md:ring-ink-900/10">
+          <div className="absolute inset-0 z-20 flex flex-col @md:inset-auto @md:right-4 @md:bottom-4 @md:h-[min(680px,calc(100%-5.25rem))] @md:w-[390px] @md:overflow-hidden @md:rounded-2xl @md:shadow-[0_24px_60px_-12px_rgb(11_18_32/0.45)] @md:ring-1 @md:ring-ink-900/10">
             <ChatWidget onMinimize={() => setChatOpen(false)} />
           </div>
         ) : (

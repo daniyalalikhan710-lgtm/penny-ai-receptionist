@@ -91,7 +91,7 @@ function Kpi({
   return (
     <div
       className={cn(
-        "rounded-xl border bg-white px-3 py-2.5 transition-colors duration-700",
+        "min-w-0 rounded-xl border bg-white px-3 py-2.5 transition-colors duration-700",
         bump ? "border-copper-400 bg-copper-50" : "border-ink-100",
       )}
     >
@@ -131,12 +131,12 @@ function KpiStrip({ today }: { today: string }) {
   const medianMs = median([...BASELINE.responseMs, ...responseMs]);
 
   return (
-    <div className="grid grid-cols-2 gap-2 @xl:grid-cols-3 @4xl:grid-cols-5">
+    <div className="grid grid-cols-2 gap-2 @lg:grid-cols-3 @3xl:grid-cols-5">
       <Kpi icon={<CalendarCheck className="size-3.5" />} label="Booked by Penny today" value={pennyJobs.length} format={(n) => String(Math.round(n))} hint="No staff time used" testId="kpi-booked" accent />
       <Kpi icon={<CircleDollarSign className="size-3.5" />} label="Revenue booked today" value={Math.round(revenue)} format={(n) => fmtMoney(Math.round(n))} hint="Estimate midpoints" testId="kpi-revenue" accent />
-      <Kpi icon={<MessageSquareText className="size-3.5" />} label="Conversations handled" value={BASELINE.conversations + (started ? 1 : 0)} format={(n) => String(Math.round(n))} hint="Chat and SMS, today" testId="kpi-conversations" />
+      <Kpi icon={<MessageSquareText className="size-3.5" />} label="Conversations today" value={BASELINE.conversations + (started ? 1 : 0)} format={(n) => String(Math.round(n))} hint="Chat and SMS, today" testId="kpi-conversations" />
       <Kpi icon={<Timer className="size-3.5" />} label="Median response time" value={Math.round(medianMs)} format={(n) => `${(n / 1000).toFixed(1)}s`} hint="To Penny's first reply" testId="kpi-response" />
-      <Kpi icon={<UsersRound className="size-3.5" />} label="Escalated to a person" value={escalations} format={(n) => String(Math.round(n))} hint="Waiting on the team" testId="kpi-escalations" />
+      <Kpi icon={<UsersRound className="size-3.5" />} label="Escalated to staff" value={escalations} format={(n) => String(Math.round(n))} hint="Waiting on the team" testId="kpi-escalations" />
     </div>
   );
 }
@@ -211,18 +211,22 @@ const CARD_LABEL: Record<Card["kind"], string> = {
 };
 
 /** The live conversation as the owner sees it, built from the real chat. */
-function liveTranscript(messages: ChatMessage[]): TranscriptLine[] {
-  const lines: TranscriptLine[] = [];
+interface ShownLine extends TranscriptLine {
+  /** Cards Penny showed the customer in this turn. */
+  shown?: string[];
+}
+
+function liveTranscript(messages: ChatMessage[]): ShownLine[] {
+  const lines: ShownLine[] = [];
   for (const m of messages) {
     if (m.role === "user") {
-      lines.push({ from: "customer", text: `${m.text}${m.image ? " [sent a photo]" : ""}`.trim() });
+      lines.push({ from: "customer", text: m.text, shown: m.image ? ["__photo"] : [] });
     } else if (m.role === "staff") {
       lines.push({ from: "staff", text: m.text });
     } else if (m.role === "assistant") {
       const text = turnText(m.turn);
       const cards = m.turn.parts.flatMap((p) => (p.type === "tool" && p.card ? [CARD_LABEL[p.card.kind]] : []));
-      const suffix = cards.length ? ` [showed: ${cards.join(", ")}]` : "";
-      if (text || suffix) lines.push({ from: "penny", text: `${text}${suffix}`.trim() });
+      if (text || cards.length) lines.push({ from: "penny", text, shown: cards });
     }
   }
   return lines;
@@ -281,7 +285,7 @@ function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () => void }) {
   const sending = useDemo((s) => s.sending);
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
-  const transcript = useMemo(() => (lead.live ? liveTranscript(messages) : lead.transcript), [lead, messages]);
+  const transcript: ShownLine[] = useMemo(() => (lead.live ? liveTranscript(messages) : lead.transcript), [lead, messages]);
   const inChat = lead.status === "human";
 
   useEffect(() => {
@@ -352,6 +356,15 @@ function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () => void }) {
                 {line.from === "customer" ? "Customer" : line.from === "penny" ? "Penny (AI)" : `${OWNER.name} (you)`}
               </span>
               {line.text}
+              {line.shown && line.shown.length > 0 ? (
+                <span className="mt-1 flex flex-wrap gap-1">
+                  {line.shown.map((card, j) => (
+                    <span key={j} className="rounded bg-white px-1.5 py-px text-[10px] font-medium text-copper-800 ring-1 ring-copper-200">
+                      {card === "__photo" ? "Sent a photo" : `Showed ${card}`}
+                    </span>
+                  ))}
+                </span>
+              ) : null}
             </div>
           </div>
         ))}
@@ -376,7 +389,11 @@ function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () => void }) {
         </form>
       ) : (
         <p className="border-t border-ink-100 px-3 py-2 text-[11px] leading-snug text-ink-500">
-          {lead.status === "penny" || lead.status === "needs_human" ? "Penny is handling this. Take over to reply yourself; Penny pauses until you hand back." : "Take over to add a reply to this conversation."}
+          {lead.status === "penny"
+            ? "Penny is handling this. Take over to reply yourself; Penny pauses until you hand back."
+            : lead.status === "needs_human"
+              ? "Penny has flagged this for a person. Take over to reply; Penny stays paused until you hand back."
+              : "Take over to add a reply to this conversation."}
         </p>
       )}
     </div>
@@ -393,7 +410,7 @@ function Inbox() {
   const selected = all.find((l) => l.id === selectedId) ?? null;
 
   return (
-    <section aria-labelledby="inbox-title" className="flex h-[420px] min-h-0 flex-col overflow-hidden rounded-2xl border border-ink-100 bg-white">
+    <section aria-labelledby="inbox-title" className="flex h-[460px] min-h-0 flex-col overflow-hidden rounded-2xl border border-ink-100 bg-white">
       {selected ? (
         <LeadDetail lead={selected} onBack={() => selectLead(null)} />
       ) : (
@@ -402,7 +419,9 @@ function Inbox() {
             <h2 id="inbox-title" className="text-[13px] font-semibold text-ink-900">
               Leads &amp; conversations
             </h2>
-            <span className="text-[11px] text-ink-500">{all.length} today</span>
+            <span className="text-[11px] text-ink-500">
+              Latest {all.length} of {BASELINE.conversations + (started ? 1 : 0)} today
+            </span>
           </div>
           <ul className="scroll-thin min-h-0 flex-1 divide-y divide-ink-100 overflow-y-auto" data-testid="inbox-list">
             {all.map((l) => (
@@ -420,7 +439,7 @@ function Inbox() {
 function Outbox() {
   const outbox = useDemo((s) => s.outbox);
   return (
-    <section aria-labelledby="outbox-title" className="flex h-[420px] min-h-0 flex-col overflow-hidden rounded-2xl border border-ink-100 bg-white">
+    <section aria-labelledby="outbox-title" className="flex h-[460px] min-h-0 flex-col overflow-hidden rounded-2xl border border-ink-100 bg-white">
       <div className="flex items-center justify-between border-b border-ink-100 px-3 py-2.5">
         <h2 id="outbox-title" className="text-[13px] font-semibold text-ink-900">
           Messages sent

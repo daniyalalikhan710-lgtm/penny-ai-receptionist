@@ -17,8 +17,8 @@ export const SEEDED_BOOKING_CODE = "CPL-4821";
 export const BASELINE = {
   /** Conversations Penny handled today before this visitor arrived. */
   conversations: 23,
-  /** Recent first-response times in ms, for the median KPI. */
-  responseMs: [1400, 1900, 1700, 2300, 1600, 1800, 2100, 1500, 1750],
+  /** First-response time in ms of each of those conversations, for the median KPI. */
+  responseMs: [1400, 1900, 1700, 2300, 1600, 1800, 2100, 1500, 1750, 1650, 2000, 1850, 1550, 2200, 1900, 1700, 1800, 1450, 2050, 1950, 1750, 1600, 1850],
 };
 
 interface SeedJob {
@@ -53,7 +53,7 @@ const SEED_JOBS: SeedJob[] = [
   { code: "CPL-4799", dayOffset: 0, startMin: 840, techId: "dee", serviceCode: "WH-REPAIR", serviceName: "Water heater repair", estLow: 180, estHigh: 450, customerName: "Greta Lindqvist", address: "203 Fairhaven St, Fairhaven", urgency: "soon", source: "web", summary: "Lukewarm water only; suspected failed heating element." },
   // Tomorrow
   { code: "CPL-4803", dayOffset: 1, startMin: 480, techId: "marcus", serviceCode: "SEWER-MAIN", serviceName: "Main sewer line clearing", estLow: 350, estHigh: 750, customerName: "Paul Okonkwo", address: "410 Eastside Blvd, Riverbend", urgency: "soon", source: "phone", summary: "Basement floor drain backing up; camera inspection requested." },
-  { code: "CPL-4819", dayOffset: 1, startMin: 600, techId: "marcus", serviceCode: "TOILET-REPAIR", serviceName: "Toilet repair", estLow: 129, estHigh: 285, customerName: "Tessa Ruiz", address: "12 Larkspur Ln, Larkspur", urgency: "routine", source: "penny", summary: "Toilet rocks at the base and leaks slightly when flushed.", bookedTodayAtMin: 455 },
+  { code: "CPL-4819", dayOffset: 1, startMin: 600, techId: "marcus", serviceCode: "TOILET-REPAIR", serviceName: "Toilet repair", estLow: 129, estHigh: 285, customerName: "Tessa Ruiz", address: "12 Larkspur Ln, Larkspur", urgency: "routine", source: "penny", summary: "Toilet rocks at the base and leaks slightly when flushed.", bookedTodayAtMin: 455, leadId: "lead-tessa" },
   { code: "CPL-4820", dayOffset: 1, startMin: 480, techId: "priya", serviceCode: "AC-REPAIR", serviceName: "Air conditioner repair", estLow: 185, estHigh: 650, customerName: "Lucía Fernández", address: "75 Westbank Rd, Riverbend", urgency: "soon", source: "penny", summary: "AC blowing warm air; customer wrote in Spanish, prefers a morning visit.", bookedTodayAtMin: 471, leadId: "lead-lucia" },
   { code: "CPL-4808", dayOffset: 1, startMin: 840, techId: "priya", serviceCode: "FURNACE-TUNEUP", serviceName: "Furnace tune-up", estLow: 109, estHigh: 159, customerName: "Ivan Sorensen", address: "33 Alder Heights Dr, Alder Heights", urgency: "routine", source: "web", summary: "Pre-winter tune-up." },
   { code: "CPL-4811", dayOffset: 1, startMin: 720, techId: "dee", serviceCode: "SUMP", serviceName: "Sump pump replacement", estLow: 480, estHigh: 950, customerName: "Joan Whitlock", address: "8 Mill Pond Ct, Millbrook", urgency: "soon", source: "phone", summary: "Sump pump is 12 years old and failed its test; replace before the rains." },
@@ -230,6 +230,26 @@ export function seedLeads(clock: Clock): Lead[] {
     },
     {
       ...base,
+      id: "lead-tessa",
+      customerName: "Tessa Ruiz",
+      channel: "SMS",
+      startedAtMin: 455,
+      summary: "Toilet rocks at the base and leaks a little when flushed. Booked a toilet repair visit tomorrow 10 AM–12 PM with Marcus.",
+      intent: "booking",
+      urgency: "routine",
+      status: "booked",
+      language: "en",
+      emergency: false,
+      jobCode: "CPL-4819",
+      transcript: [
+        { from: "customer", text: "my toilet wobbles and theres a bit of water around the base when we flush" },
+        { from: "penny", text: "That usually means the wax ring under the toilet has failed. A toilet repair runs $129 to $285. Marcus can come tomorrow between 10 AM and 12 PM. Until then, try not to rock it." },
+        { from: "customer", text: "tomorrow works" },
+        { from: "penny", text: "Booked: CPL-4819, tomorrow 10 AM–12 PM with Marcus. You'll get a text when he's on the way." },
+      ],
+    },
+    {
+      ...base,
       id: "lead-renee",
       customerName: "Renee Castillo",
       channel: "Website chat",
@@ -268,7 +288,10 @@ export function seedLeads(clock: Clock): Lead[] {
       ],
     },
   ];
-  return leads.map((lead, order) => ({ ...lead, startedAtMin: earlierToday(lead.startedAtMin, clock, order) }));
+  // Newest first, as an inbox shows them.
+  return leads
+    .sort((a, b) => b.startedAtMin - a.startedAtMin)
+    .map((lead, order) => ({ ...lead, startedAtMin: earlierToday(lead.startedAtMin, clock, order) }));
 }
 
 export function seedOutbox(clock: Clock): OutboundMessage[] {

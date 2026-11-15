@@ -83,14 +83,26 @@ function TextPart({ part }: { part: Extract<AssistantPart, { type: "text" }> }) 
   if (!part.text.trim() && part.citations.length === 0) return null;
   return (
     <div className="w-fit max-w-full rounded-2xl rounded-tl-md border border-ink-100 bg-white px-3.5 py-2.5 text-[14px] leading-relaxed whitespace-pre-wrap text-ink-900 shadow-sm">
-      {segments.map((segment, i) => (
-        <Fragment key={i}>
-          {i === 0 ? segment.text.replace(/^\s+/, "") : segment.text}
-          {segment.citations.map((citation, j) => (
-            <CitationChip key={`${citation.docId}-${citation.start}-${j}`} citation={citation} />
-          ))}
-        </Fragment>
-      ))}
+      {segments.map((segment, i) => {
+        const text = i === 0 ? segment.text.replace(/^\s+/, "") : segment.text;
+        if (segment.citations.length === 0) return <Fragment key={i}>{text}</Fragment>;
+        // Keep the chip on the same line as the last word of the claim it
+        // supports, so it never opens the next line as if it belonged to it.
+        const split = text.search(/\S+\s*$/);
+        const head = split > 0 ? text.slice(0, split) : "";
+        const tail = (split >= 0 ? text.slice(split) : text).trimEnd();
+        return (
+          <Fragment key={i}>
+            {head}
+            <span className="whitespace-nowrap">
+              {tail}
+              {segment.citations.map((citation, j) => (
+                <CitationChip key={`${citation.docId}-${citation.start}-${j}`} citation={citation} />
+              ))}
+            </span>{" "}
+          </Fragment>
+        );
+      })}
     </div>
   );
 }
@@ -218,7 +230,13 @@ function MessageRow({ message, lang }: { message: ChatMessage; lang: Lang }) {
 
 function SampleTray({ onPick, onUpload, onClose }: { onPick: (id: string) => void; onUpload: () => void; onClose: () => void }) {
   return (
-    <div className="border-t border-ink-100 bg-cream px-3 py-2.5" data-testid="sample-tray">
+    <div
+      className="border-t border-ink-100 bg-cream px-3 py-2.5"
+      data-testid="sample-tray"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
+    >
       <div className="mb-2 flex items-center justify-between">
         <p className="text-[12px] font-semibold text-ink-700">Send a photo of the problem</p>
         <button type="button" onClick={onClose} aria-label="Close photo options" className="flex size-6 items-center justify-center rounded-md text-ink-500 hover:bg-ink-100">
@@ -247,7 +265,7 @@ function SampleTray({ onPick, onUpload, onClose }: { onPick: (id: string) => voi
       >
         <ImagePlus className="size-4" aria-hidden /> Upload your own photo
       </button>
-      <p className="mt-1.5 text-[10.5px] leading-snug text-ink-500">Sample photos from Unsplash. Uploads stay in your browser and are only sent to the AI to assess the problem.</p>
+      <p className="mt-1.5 text-[10.5px] leading-snug text-ink-500">Sample photos from Unsplash. Your own photo is sent only to the AI to assess the problem and is not stored on the server.</p>
     </div>
   );
 }
@@ -297,6 +315,7 @@ function Composer({ empty }: { empty: boolean }) {
     if (sending) return;
     setShowTips(false);
     setTray(false);
+    document.querySelector<HTMLElement>('[data-testid="conversation"]')?.focus({ preventScroll: true });
     void sendUser(s.text, s.sampleId ? { kind: "sample", sampleId: s.sampleId } : null);
   };
 
@@ -338,7 +357,7 @@ function Composer({ empty }: { empty: boolean }) {
                     disabled={sending || paused}
                     onClick={() => sendSuggestion(s)}
                     className={cn(
-                      "flex min-h-8 items-center gap-1.5 rounded-full border px-3 py-1 text-left text-[12.5px] leading-snug font-medium text-ink-800 transition hover:border-copper-400 hover:bg-copper-50 disabled:opacity-50",
+                      "tap flex min-h-8 items-center gap-1.5 rounded-full border px-3 py-1 text-left text-[12.5px] leading-snug font-medium text-ink-800 transition hover:border-copper-400 hover:bg-copper-50 disabled:opacity-50",
                       startHere ? "border-copper-500 bg-copper-50 shadow-[0_0_0_3px_rgb(184_115_51/0.18)]" : "border-ink-200 bg-cream",
                     )}
                   >
@@ -402,7 +421,7 @@ function Composer({ empty }: { empty: boolean }) {
           data-testid="chat-input"
           rows={1}
           value={text}
-          maxLength={4000}
+          maxLength={1500}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
           placeholder={paused ? `Reply to ${OWNER.name}…` : "Describe the problem…"}
@@ -438,9 +457,16 @@ export function ChatWidget({ onMinimize }: { onMinimize?: () => void }) {
   const last = messages[messages.length - 1];
 
   // Keep the newest content in view unless the visitor has scrolled up to read.
+  // The one exception is a safety card: its headline must not scroll away.
   useEffect(() => {
     const el = scrollRef.current;
-    if (el && stick.current) el.scrollTop = el.scrollHeight;
+    if (!el || !stick.current) return;
+    const emergency = last?.role === "assistant" ? el.querySelector<HTMLElement>('[data-testid="assistant-message"]:last-of-type [data-testid="card-emergency"]') : null;
+    if (emergency) {
+      el.scrollTop = Math.max(0, emergency.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop - 8);
+    } else {
+      el.scrollTop = el.scrollHeight;
+    }
   });
 
   // Screen readers hear each finished reply once, not every streamed token.
@@ -494,8 +520,19 @@ export function ChatWidget({ onMinimize }: { onMinimize?: () => void }) {
         className="scroll-thin min-h-0 flex-1 overflow-y-auto px-3 py-3"
         tabIndex={0}
         aria-label="Conversation"
+        data-testid="conversation"
       >
         <div className="flex flex-col gap-3">
+          {empty ? (
+            <aside aria-label="How this demo works" className="rounded-2xl border border-copper-200 bg-copper-50 px-3.5 py-2.5 text-[12.5px] leading-snug text-ink-800" data-testid="demo-intro">
+              <p className="font-semibold text-copper-800">You&rsquo;re the customer here.</p>
+              <p className="mt-0.5">
+                Tap a prompt below and book a visit with Penny.{" "}
+                <span className="lg:hidden">Then open the <strong className="font-semibold">Owner</strong> tab to see what the business sees.</span>
+                <span className="max-lg:hidden">Everything she does shows up on the owner&rsquo;s dashboard as it happens.</span>
+              </p>
+            </aside>
+          ) : null}
           <div className="flex items-start gap-2">
             <PennyAvatar size={28} className="mt-0.5" />
             <div className="w-fit max-w-full rounded-2xl rounded-tl-md border border-ink-100 bg-white px-3.5 py-2.5 text-[14px] leading-relaxed text-ink-900 shadow-sm">

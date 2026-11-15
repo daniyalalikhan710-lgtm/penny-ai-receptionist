@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { URGENCY_CLASS, urgencyLabel } from "@/lib/client/i18n";
 import { useDemo } from "@/lib/client/store";
 import { sampleById } from "@/lib/domain/samples";
-import { BOOKING_HORIZON_DAYS, SLOT_DURATION, SLOT_STARTS } from "@/lib/domain/slots";
+import { BOOKING_HORIZON_DAYS, DAY_END, SLOT_DURATION, SLOT_STARTS } from "@/lib/domain/slots";
 import { TECHNICIANS } from "@/lib/domain/technicians";
 import { addDays, fmtDay, fmtDayRelative, fmtMoney, fmtTime, fmtWindow } from "@/lib/domain/time";
 import type { Clock, Job } from "@/lib/domain/types";
@@ -54,14 +54,18 @@ function JobCard({ job, clock, onOpen }: { job: Job; clock: Clock; onOpen: (job:
   const progress = progressOf(job, clock);
   const urgency = URGENCY_CLASS[job.urgency];
 
+  const ref = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!landed) return;
+    // On a narrow board the new job may be off to the side: bring it into view.
+    ref.current?.scrollIntoView({ block: "nearest", inline: "center" });
     const timer = window.setTimeout(() => clearLanded(job.code), 2200);
     return () => window.clearTimeout(timer);
   }, [landed, clearLanded, job.code]);
 
   return (
     <button
+      ref={ref}
       type="button"
       data-job-code={job.code}
       data-testid="job-card"
@@ -176,7 +180,10 @@ export function DispatchBoard({ clock }: { clock: Clock }) {
   const setBoardDay = useDemo((s) => s.setBoardDay);
   const [open, setOpen] = useState<Job | null>(null);
   const days = Array.from({ length: BOOKING_HORIZON_DAYS }, (_, i) => addDays(clock.today, i));
-  const day = boardDay && days.includes(boardDay) ? boardDay : clock.today;
+  // After the last window of the day the board opens on tomorrow, where the
+  // next work is; "Today" is one tap away.
+  const afterHours = clock.nowMinutes >= DAY_END;
+  const day = boardDay && days.includes(boardDay) ? boardDay : afterHours ? days[1] : clock.today;
   const visible = jobs.filter((job) => job.date === day && job.status !== "cancelled");
   const currentSlot = day === clock.today ? SLOT_STARTS.find((s) => clock.nowMinutes >= s && clock.nowMinutes < s + SLOT_DURATION) : undefined;
 
@@ -198,7 +205,7 @@ export function DispatchBoard({ clock }: { clock: Clock }) {
                 data-testid={`board-day-${d}`}
                 onClick={() => setBoardDay(d)}
                 className={cn(
-                  "flex min-h-7 shrink-0 items-center gap-1.5 rounded-lg px-2 text-[11.5px] font-medium transition",
+                  "tap flex min-h-7 shrink-0 items-center gap-1.5 rounded-lg px-2 text-[11.5px] font-medium transition",
                   selected ? "bg-ink-900 text-cream" : "text-ink-700 hover:bg-ink-100",
                 )}
               >

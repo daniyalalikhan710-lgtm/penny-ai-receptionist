@@ -220,3 +220,16 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Touch screens: bigger targets, and 16px form text so iOS Safari does not
+   zoom the page when a field takes focus. */
+@media (pointer: coarse) {
+  .tap {
+    min-height: 40px;
+  }
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}

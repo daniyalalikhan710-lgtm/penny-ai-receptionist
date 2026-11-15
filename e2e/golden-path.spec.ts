@@ -198,3 +198,71 @@ test("mobile: tabs instead of a split screen, and the chat fits 375px", async ({
   expect(box?.height ?? 999).toBeLessThan(260);
   await context.close();
 });
+
+test("details form: a rejected ZIP can be corrected, and paying while Penny is typing still confirms", async ({ page }) => {
+  const errors = await openDemo(page);
+  await page.getByRole("button", { name: /My water heater is leaking/ }).click();
+  await expect(page.getByTestId("card-slots")).toBeVisible();
+  await settled(page);
+  await page.getByTestId("slot-option").first().click();
+  const details = page.getByTestId("card-details");
+  await expect(details).toBeVisible();
+  await settled(page);
+
+  // Client-side validation keeps the form editable.
+  await details.getByLabel("Phone").fill("abc");
+  await page.getByTestId("details-submit").click();
+  await expect(details.getByRole("alert")).toContainText("phone number");
+  await details.getByLabel("Phone").fill("(555) 010-0142");
+
+  // A ZIP the server refuses: Penny explains, and the form unlocks again.
+  await details.getByLabel("ZIP").fill("97520");
+  await page.getByTestId("details-submit").click();
+  await expect(page.getByTestId("assistant-message").last()).toContainText("outside the area we serve");
+  await settled(page);
+  await expect(page.getByTestId("card-checkout")).toHaveCount(0);
+  await expect(details.getByLabel("ZIP")).toBeEnabled();
+  await details.getByLabel("ZIP").fill("97401");
+  await page.getByTestId("details-submit").click();
+
+  // Pay as soon as the checkout card appears, without waiting for Penny to finish typing.
+  const checkout = page.getByTestId("card-checkout");
+  await expect(checkout).toBeVisible();
+  await checkout.getByLabel("Expiry").fill("01/20");
+  await page.getByTestId("pay-button").click();
+  await expect(checkout.getByRole("alert")).toContainText("expired");
+  await checkout.getByLabel("Expiry").fill("12/30");
+  await page.getByTestId("pay-button").click();
+  await expect(page.getByTestId("card-confirmation")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("kpi-booked")).toHaveAttribute("data-value", "5");
+  expect(errors).toEqual([]);
+});
+
+test("reduced motion and phones: the booked job is still shown, and the Owner tab is badged", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true, reducedMotion: "reduce" });
+  const page = await context.newPage();
+  const evening = new Date();
+  evening.setHours(20, 40, 0, 0); // after hours: the earliest window is tomorrow
+  await page.clock.install({ time: evening });
+  await page.goto("/");
+  await expect(page.getByTestId("demo-intro")).toContainText("You’re the customer here");
+  await page.getByRole("button", { name: /My water heater is leaking/ }).click();
+  await expect(page.getByTestId("card-slots")).toBeVisible();
+  await expect(page.getByTestId("assistant-message").last()).toContainText("after-hours dispatcher");
+  await settled(page);
+  await page.getByTestId("slot-option").first().click();
+  await expect(page.getByTestId("card-details")).toBeVisible();
+  await settled(page);
+  await page.getByTestId("details-submit").click();
+  await expect(page.getByTestId("card-checkout")).toBeVisible();
+  await page.getByTestId("pay-button").click();
+  await expect(page.getByTestId("card-confirmation")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("owner-badge")).toBeVisible();
+  await page.getByTestId("view-owner").click();
+  await expect(page.getByTestId("owner-badge")).toHaveCount(0);
+  // The board has switched to the day the job landed on, and the card is on screen.
+  const job = page.locator('[data-job-code="CPL-4822"]');
+  await expect(job).toBeVisible();
+  await expect(job).toBeInViewport();
+  await context.close();
+});
