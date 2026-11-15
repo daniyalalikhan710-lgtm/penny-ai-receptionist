@@ -112,6 +112,8 @@ export type DemoStore = DemoData & DemoRuntime & DemoActions;
 
 const STORAGE_KEY = "penny-demo-v1";
 
+const NO_STORAGE = { getItem: () => null, setItem: () => undefined, removeItem: () => undefined };
+
 function now(): Clock {
   return clockFromDate(new Date());
 }
@@ -406,7 +408,8 @@ export const useDemo = create<DemoStore>()(
     {
       name: STORAGE_KEY,
       version: 1,
-      storage: createJSONStorage(() => localStorage),
+      // On the server there is no browser storage; a no-op keeps prerendering quiet.
+      storage: createJSONStorage(() => (typeof window === "undefined" ? NO_STORAGE : window.localStorage)),
       skipHydration: true,
       partialize: (s): DemoData => ({
         seedDay: s.seedDay,

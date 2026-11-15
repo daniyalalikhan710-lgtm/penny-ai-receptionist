@@ -267,7 +267,7 @@ export function XrayPanel() {
               {(totals.input + totals.cacheRead + totals.cacheWrite).toLocaleString()} / {totals.output.toLocaleString()}
             </dd>
           </div>
-          <div className="flex items-center gap-1.5 text-emerald-300">
+          <div className={cn("items-center gap-1.5 text-emerald-300", totals.input + totals.cacheRead + totals.cacheWrite > 0 ? "flex" : "hidden")}>
             <dt className="flex items-center gap-1 text-emerald-400">
               <Zap className="size-3" aria-hidden /> served from cache
             </dt>

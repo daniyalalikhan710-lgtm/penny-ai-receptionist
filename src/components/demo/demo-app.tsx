@@ -15,10 +15,10 @@ import { FlightLayer } from "./flight-layer";
 
 function DemoBanner({ authorName, hireUrl }: { authorName: string; hireUrl: string }) {
   return (
-    <div className="on-dark flex shrink-0 flex-wrap items-center justify-center gap-x-3 gap-y-0.5 bg-ink-950 px-3 py-1.5 text-center text-[11.5px] leading-tight text-ink-200" data-testid="demo-banner">
+    <div className="on-dark flex shrink-0 flex-wrap items-center justify-center gap-x-3 gap-y-0.5 bg-ink-950 px-3 py-1.5 text-center text-[11px] leading-tight text-ink-200 sm:text-[11.5px]" data-testid="demo-banner">
       <p>
         <span className="font-semibold text-copper-300">Live demo</span>
-        <span aria-hidden> · </span>Copperline is a fictional business<span aria-hidden> · </span>No real payments or messages
+        <span aria-hidden> · </span>Copperline is a fictional business<span aria-hidden> · </span>No real payments<span className="max-sm:hidden"> or messages</span>
       </p>
       {authorName ? (
         <p className="text-ink-300">
@@ -144,7 +144,7 @@ function TopBar({ wide, view }: { wide: boolean; view: ViewMode }) {
 
 function PaneLabel({ icon, title, hint }: { icon: React.ReactNode; title: string; hint: string }) {
   return (
-    <div className="on-dark flex shrink-0 items-center gap-2 bg-ink-800 px-3 py-1 text-[11px] text-ink-200">
+    <div className="on-dark hidden shrink-0 items-center gap-2 bg-ink-800 px-3 py-1 text-[11px] text-ink-200 lg:flex">
       <span className="text-copper-300" aria-hidden>
         {icon}
       </span>
@@ -160,7 +160,7 @@ function CustomerPane() {
   return (
     <div className="@container relative flex h-full min-h-0 flex-col bg-cream" data-testid="customer-pane">
       <PaneLabel icon={<MonitorSmartphone className="size-3.5" />} title="Customer view" hint="Copperline's website, with Penny on it" />
-      <div className="flex shrink-0 items-center gap-2 border-b border-ink-100 bg-ink-50 px-3 py-1.5" aria-hidden>
+      <div className="hidden shrink-0 items-center gap-2 border-b border-ink-100 bg-ink-50 px-3 py-1.5 @md:flex" aria-hidden>
         <span className="flex gap-1">
           <span className="size-2.5 rounded-full bg-ink-200" />
           <span className="size-2.5 rounded-full bg-ink-200" />

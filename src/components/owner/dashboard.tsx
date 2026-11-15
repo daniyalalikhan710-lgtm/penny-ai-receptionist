@@ -132,10 +132,10 @@ function KpiStrip({ today }: { today: string }) {
 
   return (
     <div className="grid grid-cols-2 gap-2 @xl:grid-cols-3 @4xl:grid-cols-5">
-      <Kpi icon={<CalendarCheck className="size-3.5" />} label="Booked by Penny today" value={pennyJobs.length} format={(n) => String(Math.round(n))} hint="Jobs booked with no staff time" testId="kpi-booked" accent />
-      <Kpi icon={<CircleDollarSign className="size-3.5" />} label="Revenue booked today" value={Math.round(revenue)} format={(n) => fmtMoney(Math.round(n))} hint="Midpoint of each job's estimate" testId="kpi-revenue" accent />
-      <Kpi icon={<MessageSquareText className="size-3.5" />} label="Conversations handled" value={BASELINE.conversations + (started ? 1 : 0)} format={(n) => String(Math.round(n))} hint="Website chat and SMS, today" testId="kpi-conversations" />
-      <Kpi icon={<Timer className="size-3.5" />} label="Median response time" value={Math.round(medianMs)} format={(n) => `${(n / 1000).toFixed(1)}s`} hint="Time to Penny's first reply" testId="kpi-response" />
+      <Kpi icon={<CalendarCheck className="size-3.5" />} label="Booked by Penny today" value={pennyJobs.length} format={(n) => String(Math.round(n))} hint="No staff time used" testId="kpi-booked" accent />
+      <Kpi icon={<CircleDollarSign className="size-3.5" />} label="Revenue booked today" value={Math.round(revenue)} format={(n) => fmtMoney(Math.round(n))} hint="Estimate midpoints" testId="kpi-revenue" accent />
+      <Kpi icon={<MessageSquareText className="size-3.5" />} label="Conversations handled" value={BASELINE.conversations + (started ? 1 : 0)} format={(n) => String(Math.round(n))} hint="Chat and SMS, today" testId="kpi-conversations" />
+      <Kpi icon={<Timer className="size-3.5" />} label="Median response time" value={Math.round(medianMs)} format={(n) => `${(n / 1000).toFixed(1)}s`} hint="To Penny's first reply" testId="kpi-response" />
       <Kpi icon={<UsersRound className="size-3.5" />} label="Escalated to a person" value={escalations} format={(n) => String(Math.round(n))} hint="Waiting on the team" testId="kpi-escalations" />
     </div>
   );
@@ -278,12 +278,13 @@ function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () => void }) {
   const staffReply = useDemo((s) => s.staffReply);
   const sending = useDemo((s) => s.sending);
   const [draft, setDraft] = useState("");
-  const endRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const transcript = useMemo(() => (lead.live ? liveTranscript(messages) : lead.transcript), [lead, messages]);
   const inChat = lead.status === "human";
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "nearest" });
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [transcript.length]);
 
   const submit = (e: FormEvent) => {
@@ -333,7 +334,7 @@ function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () => void }) {
           {lead.summary}
         </p>
       ) : null}
-      <div className="scroll-thin min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-2.5" tabIndex={0} aria-label="Conversation transcript">
+      <div ref={scrollRef} className="scroll-thin min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-2.5" tabIndex={0} aria-label="Conversation transcript">
         {transcript.length === 0 && <p className="py-6 text-center text-[12px] text-ink-500">No messages yet. Send one from the customer view.</p>}
         {transcript.map((line, i) => (
           <div key={i} className={cn("flex", line.from === "customer" ? "justify-start" : "justify-end")}>
@@ -352,7 +353,6 @@ function LeadDetail({ lead, onBack }: { lead: Lead; onBack: () => void }) {
             </div>
           </div>
         ))}
-        <div ref={endRef} />
       </div>
       {inChat ? (
         <form onSubmit={submit} className="flex items-center gap-1.5 border-t border-ink-100 p-2">

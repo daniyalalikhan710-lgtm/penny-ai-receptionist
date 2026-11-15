@@ -90,7 +90,7 @@ function JobCard({ job, clock, onOpen }: { job: Job; clock: Clock; onOpen: (job:
         {job.photo ? <Camera className="size-3 shrink-0 text-ink-500" aria-hidden /> : null}
         <span
           className={cn(
-            "rounded px-1 py-px text-[9.5px] leading-tight font-semibold",
+            "rounded px-1 py-px text-[9.5px] leading-tight font-semibold whitespace-nowrap",
             progress === "held" && "bg-copper-200 text-copper-900",
             progress === "scheduled" && "bg-ink-100 text-ink-700",
             progress === "now" && "bg-emerald-100 text-emerald-900",
@@ -195,7 +195,7 @@ export function DispatchBoard({ clock }: { clock: Clock }) {
       </div>
 
       <div className="scroll-thin overflow-x-auto p-2">
-        <div role="table" aria-label={`Jobs for ${fmtDayRelative(day, clock.today)}`} className="grid min-w-[560px] grid-cols-[92px_repeat(5,minmax(0,1fr))] gap-1">
+        <div role="table" aria-label={`Jobs for ${fmtDayRelative(day, clock.today)}`} className="grid min-w-[680px] grid-cols-[92px_repeat(5,minmax(0,1fr))] gap-1">
           <div role="row" className="contents">
             <div role="columnheader">
               <span className="sr-only">Technician</span>

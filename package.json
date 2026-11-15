@@ -10,10 +10,11 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "playwright test",
+    "e2e": "next build && playwright test",
     "eval": "tsx evals/run.ts",
     "eval:replay": "tsx evals/run.ts --replay",
-    "screenshots": "tsx scripts/screenshots.ts"
+    "screenshots": "tsx scripts/screenshots.ts",
+    "e2e:only": "playwright test"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
