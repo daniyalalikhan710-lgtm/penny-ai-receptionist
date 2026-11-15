@@ -98,8 +98,13 @@ describe("replay routing", () => {
 
 describe("request plumbing", () => {
   it("prefers the platform's client address over a forgeable header", () => {
-    expect(clientIp(new Headers({ "x-forwarded-for": "6.6.6.6", "x-real-ip": "7.7.7.7", "x-vercel-forwarded-for": "8.8.8.8" }))).toBe("8.8.8.8");
-    expect(clientIp(new Headers({ "x-forwarded-for": "6.6.6.6", "x-real-ip": "7.7.7.7" }))).toBe("7.7.7.7");
+    const headers = new Headers({ "x-forwarded-for": "6.6.6.6, 9.9.9.9", "x-real-ip": "7.7.7.7", "x-vercel-forwarded-for": "8.8.8.8", "cf-connecting-ip": "5.5.5.5" });
+    // On Vercel the platform's own headers win.
+    expect(clientIp(headers, { NODE_ENV: "test", VERCEL: "1" })).toBe("8.8.8.8");
+    // Elsewhere a client could set those itself, so they are ignored...
+    expect(clientIp(headers, { NODE_ENV: "test" })).toBe("9.9.9.9");
+    // ...unless the operator names the header their own proxy sets.
+    expect(clientIp(headers, { NODE_ENV: "test", PENNY_CLIENT_IP_HEADER: "CF-Connecting-IP" })).toBe("5.5.5.5");
   });
 
   it("stops reading a body that is larger than allowed", async () => {
@@ -107,5 +112,23 @@ describe("request plumbing", () => {
     expect(await readBodyCapped(big, 1000)).toBeNull();
     const small = new Request("http://x", { method: "POST", body: "hello" });
     expect(await readBodyCapped(small, 1000)).toBe("hello");
+  });
+});
+
+describe("security review fixes", () => {
+  const sample = { kind: "sample" as const, sampleId: "toilet" };
+  const photo = (): WireMessage => ({ role: "user", text: "photo", sentAt: "t", image: sample });
+
+  it("counts photos across the whole transcript even when the newest message has none", () => {
+    const messages: WireMessage[] = [photo(), photo(), photo(), photo(), user("and now just text")];
+    expect(checkCaps({ messages, state: state(), clock })?.code).toBe("image_cap");
+    const event: WireMessage = { role: "event", sentAt: "t", event: { kind: "handback" } };
+    expect(checkCaps({ messages: [photo(), photo(), photo(), photo(), event], state: state(), clock })?.code).toBe("image_cap");
+    expect(checkCaps({ messages: [photo(), photo(), photo(), user("text")], state: state(), clock })).toBeNull();
+  });
+
+  it("measures the transcript in bytes, so dense scripts cannot slip under the cap", () => {
+    const cjk = "水".repeat(1400);
+    expect(transcriptChars([user(cjk)])).toBe(4200);
   });
 });

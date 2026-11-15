@@ -4,7 +4,7 @@ import { techById } from "@/lib/domain/technicians";
 import { diffDays, localDayStr } from "@/lib/domain/time";
 import type { StreamEvent } from "@/lib/domain/types";
 import { resolveMode, runTurn } from "@/lib/server/engine";
-import { CAPS, checkRate, clientIp, readBodyCapped } from "@/lib/server/limits";
+import { CAPS, checkRate, clientIp, crossSiteProblem, readBodyCapped } from "@/lib/server/limits";
 
 export const maxDuration = 60;
 
@@ -31,6 +31,9 @@ function noticeStream(status: number, event: Extract<StreamEvent, { type: "notic
  * never leave the server.
  */
 export async function POST(request: Request): Promise<Response> {
+  const crossSite = crossSiteProblem(request);
+  if (crossSite) return json(crossSite.status, crossSite.reason);
+
   // Cheapest checks first: the limiter runs before any body is read or parsed.
   const rate = await checkRate(clientIp(request.headers));
   if (!rate.ok) {

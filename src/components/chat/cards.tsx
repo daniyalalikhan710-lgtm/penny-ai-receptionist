@@ -289,7 +289,7 @@ function DetailsCard({ card, toolId, lang }: CardProps<"details">) {
       setError(lang === "es" ? "Indique su nombre y la dirección del servicio." : "Please enter your name and the service address.");
       return;
     }
-    if (details.phone.replace(/\D/g, "").length < 7) {
+    if (details.phone.replace(/\D/g, "").length < 7 || !/^[0-9+() .-]{7,30}$/.test(details.phone.trim())) {
       setError(lang === "es" ? "Indique un teléfono válido." : "Please enter a phone number we can reach you on.");
       return;
     }
@@ -378,6 +378,11 @@ function CheckoutCard({ card, toolId, lang }: CardProps<"checkout">) {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (busy || paid) return;
+    // A card number other than the public test card never leaves the browser.
+    if (form.number.replace(/\D/g, "") !== "4242424242424242") {
+      setError(lang === "es" ? "Esta demostración solo acepta la tarjeta de prueba 4242 4242 4242 4242. No use tarjetas reales." : "This demo only accepts the test card 4242 4242 4242 4242. No real cards, please.");
+      return;
+    }
     setBusy(true);
     setError(null);
     // The job card flies from here to the dispatch board when both are visible.
@@ -452,7 +457,7 @@ function CheckoutCard({ card, toolId, lang }: CardProps<"checkout">) {
 /* ----------------------------- Confirmation ---------------------------- */
 
 function icsHref(booking: BookingView): string {
-  const esc = (text: string) => text.replace(/([,;\\])/g, "\\$1");
+  const esc = (text: string) => text.replace(/([,;\\])/g, "\\$1").replace(/\r?\n|\r/g, "\\n");
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
@@ -562,7 +567,7 @@ function EmergencyCard({ card, toolId, lang }: CardProps<"emergency">) {
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (sent || sending || phone.replace(/\D/g, "").length < 7) return;
+    if (sent || sending || !/^[0-9+() .-]{7,30}$/.test(phone.trim()) || phone.replace(/\D/g, "").length < 7) return;
     setCardState(toolId, { callbackSent: true });
     void sendEvent({ kind: "callback_requested", phone: phone.trim() });
   };

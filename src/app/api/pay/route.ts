@@ -2,7 +2,7 @@ import { payRequestSchema } from "@/lib/domain/schemas";
 import { LIVE_LEAD_ID } from "@/lib/domain/seed";
 import { techById } from "@/lib/domain/technicians";
 import { diffDays, localDayStr } from "@/lib/domain/time";
-import { checkRate, clientIp, readBodyCapped } from "@/lib/server/limits";
+import { checkRate, clientIp, crossSiteProblem, readBodyCapped } from "@/lib/server/limits";
 import { confirmPayment } from "@/lib/server/tools";
 
 function json(status: number, body: Record<string, unknown>): Response {
@@ -16,6 +16,9 @@ function json(status: number, body: Record<string, unknown>): Response {
  * price book's diagnostic fee, whatever the client sent.
  */
 export async function POST(request: Request): Promise<Response> {
+  const crossSite = crossSiteProblem(request);
+  if (crossSite) return json(crossSite.status, { ok: false, reason: crossSite.reason });
+
   const rate = await checkRate(clientIp(request.headers));
   if (!rate.ok) return json(429, { ok: false, reason: "Demo limit reached. Give it a minute and try again." });
 

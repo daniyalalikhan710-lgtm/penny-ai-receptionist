@@ -93,7 +93,7 @@ Key files:
 
 **Cost per conversation.** Not measured yet: this build has no API key. An estimate from the prompt size (about 6,500 cached tokens) and published prices is roughly **10 to 15 cents on Claude Opus 5.5** for a full photo-to-paid-booking conversation of about ten model steps, and **under 1 cent on Claude Haiku 5.5**. The measured figure replaces this paragraph after the live verification step; X-ray mode reports the real cost of every turn.
 
-**Cost safety.** Server-side caps on messages per conversation, characters per message, total transcript size, photos per conversation, upload size, `max_tokens` and tool steps; a per-IP rate limit (Upstash Redis when configured, in-memory otherwise); and a global daily cap on live turns, after which Penny drops to replay. Each cap produces a friendly "demo limit reached" message.
+**Cost safety.** Server-side caps on messages per conversation, characters per message, total transcript size, photos per conversation, upload size, `max_tokens` and tool steps; a per-IP rate limit; same-origin JSON only, so another site cannot spend the budget through its visitors; and a global daily budget in both turns and estimated dollars, after which Penny drops to replay. Each cap produces a friendly "demo limit reached" message. With Upstash Redis configured, the rate limit and budget are shared across server instances; without it they are per instance, so **set a hard spend limit on the API key as well**: that is the real ceiling.
 
 ## Quality
 
@@ -142,14 +142,25 @@ All are documented in [`.env.example`](.env.example).
 | `NEXT_PUBLIC_AUTHOR_NAME`, `NEXT_PUBLIC_HIRE_URL` | blank | "Built by … · Hire me" in the banner. The link is hidden if the URL is blank. |
 | `PENNY_MAX_TURNS`, `PENNY_MAX_MESSAGE_CHARS`, `PENNY_MAX_IMAGES`, `PENNY_MAX_TOKENS`, `PENNY_MAX_TRANSCRIPT_CHARS` | 30, 1500, 3, 4096, 60000 | Per-conversation caps. |
 | `PENNY_RATE_PER_MINUTE`, `PENNY_RATE_PER_DAY` | 20, 200 | Per-IP rate limits. |
-| `PENNY_DAILY_LIVE_TURNS` | 1500 | Global daily budget of live turns before falling back to replay. |
-| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | blank | Optional shared rate limiting across serverless instances. |
+| `PENNY_DAILY_LIVE_TURNS`, `PENNY_DAILY_BUDGET_USD` | 1500, 5 | Global daily live budget (turns and estimated dollars) before falling back to replay. |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | blank | Optional. Makes the rate limit and daily budget shared across serverless instances. Recommended for a public live link. |
+| `PENNY_CLIENT_IP_HEADER` | blank | Only off Vercel: the header your proxy sets to the visitor's address. |
 
 ## Deploy to Vercel
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fdaniyalalikhan710-lgtm%2Fpenny-ai-receptionist&env=NEXT_PUBLIC_AUTHOR_NAME&envDescription=Optional%3A%20add%20ANTHROPIC_API_KEY%20for%20live%20mode.%20Without%20it%20Penny%20runs%20in%20replay%20mode.&envLink=https%3A%2F%2Fgithub.com%2Fdaniyalalikhan710-lgtm%2Fpenny-ai-receptionist%2Fblob%2Fmain%2F.env.example)
 
 No database or other services are needed. To go live after deploying, add `ANTHROPIC_API_KEY` (and optionally `ANTHROPIC_MODEL`) under Project → Settings → Environment Variables and redeploy. For a public link, also add the Upstash variables so the rate limit is shared across instances.
+
+## What would change for a real business
+
+The demo keeps each visitor's sandbox in their own browser, which is what makes it free to host and safe to share. A production build for a real company would replace that with real systems, and three things in particular would change:
+
+- **State moves to the server.** Bookings, the calendar and the conversation history live in a database, so the server no longer accepts history from the browser. (Here, the server validates what the browser sends and the tools re-check every price, slot and payment, so a tampered client can only mislead its own chat, never get a wrong price on a card or a confirmation without payment.)
+- **Staff sign in.** Taking over a chat would require an authenticated staff session. In the demo the "owner" is the same visitor, so staff notes are treated as conversation context that cannot change prices or rules.
+- **Bookings are tied to the customer.** A booking code alone can look up, move or cancel a visit here, as a confirmation link would; it never reveals a surname or address. A real system would verify the phone number or send a one-time code first.
+
+The audit behind these notes is in [`docs/security-review.md`](docs/security-review.md).
 
 ## Roadmap
 

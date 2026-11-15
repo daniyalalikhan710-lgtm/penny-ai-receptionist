@@ -1,3 +1,4 @@
+import "server-only";
 import {
   AFTER_HOURS_SURCHARGE,
   DIAGNOSTIC_FEE,

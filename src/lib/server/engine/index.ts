@@ -1,5 +1,6 @@
+import "server-only";
 import type { NoticeCode, StreamEvent, WireMessage } from "@/lib/domain/types";
-import { CAPS, takeLiveTurn } from "../limits";
+import { CAPS, recordLiveSpend, takeLiveTurn } from "../limits";
 import { LiveUnavailableError, createAnthropicClient, createLiveEngine, liveConfigFromEnv, type MessagesClient } from "./live";
 import { createReplayEngine } from "./replay";
 import type { Emit, Engine, EngineOptions, TurnInput } from "./types";
@@ -38,20 +39,25 @@ function uploadProblem(message: Extract<WireMessage, { role: "user" }>): string 
   return null;
 }
 
+/** UTF-8 bytes, so text in scripts that cost more tokens per character counts for more. */
+function byteLength(text: string): number {
+  return Buffer.byteLength(text, "utf8");
+}
+
 function jsonLength(value: unknown): number {
   try {
-    return JSON.stringify(value)?.length ?? 0;
+    return byteLength(JSON.stringify(value) ?? "");
   } catch {
     return Number.MAX_SAFE_INTEGER;
   }
 }
 
-/** Size of everything in the transcript that becomes prompt text. */
+/** Size, in UTF-8 bytes, of everything in the transcript that becomes prompt text. */
 export function transcriptChars(messages: WireMessage[]): number {
   let total = 0;
   for (const message of messages) {
-    if (message.role === "user" || message.role === "staff") total += message.text.length;
-    else if (message.role === "assistant") total += message.text.length + jsonLength(message.tools);
+    if (message.role === "user" || message.role === "staff") total += byteLength(message.text);
+    else if (message.role === "assistant") total += byteLength(message.text) + jsonLength(message.tools);
     else total += jsonLength(message.event);
   }
   return total;
@@ -79,6 +85,14 @@ export function checkCaps(input: TurnInput): Rejection | null {
   if (messages.some((m) => m !== last && m.role === "user" && m.text.length > CAPS.maxMessageChars)) {
     return { code: "too_long", message: "An earlier message in this conversation is too long for this demo. Use “Reset demo” to start again." };
   }
+  // Photos are counted across the whole transcript on every request: each one
+  // is re-sent to the model on every step, whatever the newest message is.
+  if (messages.filter((m) => m.role === "user" && m.image).length > CAPS.maxImagesPerConversation) {
+    return {
+      code: "image_cap",
+      message: `Demo limit reached: ${CAPS.maxImagesPerConversation} photos per conversation. Use “Reset demo” to start again.`,
+    };
+  }
   if (transcriptChars(messages) > CAPS.maxTranscriptChars) {
     return {
       code: "message_cap",
@@ -93,13 +107,6 @@ export function checkCaps(input: TurnInput): Rejection | null {
       };
     }
     if (!last.text.trim() && !last.image) return { code: "error", message: "That message was empty." };
-    const images = messages.filter((m) => m.role === "user" && m.image).length;
-    if (last.image && images > CAPS.maxImagesPerConversation) {
-      return {
-        code: "image_cap",
-        message: `Demo limit reached: ${CAPS.maxImagesPerConversation} photos per conversation. Use “Reset demo” to start again.`,
-      };
-    }
     const problem = uploadProblem(last);
     if (problem) return { code: "upload_invalid", message: problem };
   }
@@ -160,6 +167,8 @@ export async function runTurn(input: TurnInput, emit: Emit, options: RunTurnOpti
 
   const client = options.client ?? (cachedClient ??= createAnthropicClient());
   const config = liveConfigFromEnv(client);
+  // Every step's estimated cost counts toward today's shared budget.
+  if (!options.skipBudget) config.onStepCost = (usd) => void recordLiveSpend(usd);
   emit({ type: "meta", mode: "live", model: config.model });
   try {
     const result = await createLiveEngine(config).run(input, emit, options);

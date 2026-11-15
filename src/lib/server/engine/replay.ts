@@ -1,3 +1,4 @@
+import "server-only";
 import { sampleById } from "@/lib/domain/samples";
 import { parseSlotId, SLOT_DURATION } from "@/lib/domain/slots";
 import { techById } from "@/lib/domain/technicians";

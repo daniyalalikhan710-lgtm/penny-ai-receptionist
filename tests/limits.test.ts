@@ -78,7 +78,8 @@ describe("rate limiting", () => {
   });
 
   it("reads the client address from proxy headers", () => {
-    expect(clientIp(new Headers({ "x-forwarded-for": "9.9.9.9, 10.0.0.1" }))).toBe("9.9.9.9");
+    // The right-most entry is the one the nearest proxy added; the left-most is client-supplied.
+    expect(clientIp(new Headers({ "x-forwarded-for": "9.9.9.9, 10.0.0.1" }), { NODE_ENV: "test" })).toBe("10.0.0.1");
     expect(clientIp(new Headers())).toBe("unknown");
   });
 });

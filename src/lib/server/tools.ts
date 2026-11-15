@@ -1,3 +1,4 @@
+import "server-only";
 import { z } from "zod";
 import { applyPatches, type PatchableState } from "@/lib/domain/patches";
 import { checkSlot, findSlots, type SlotProblem } from "@/lib/domain/slots";
@@ -461,8 +462,11 @@ const createBooking = define({
   run: (input, ctx) => {
     const service = serviceByCode(input.service_code);
     if (!service) return fail("Unknown service code.");
-    const name = input.customer_name.trim().slice(0, 80);
-    const address = input.address.trim().slice(0, 160);
+    // Collapse line breaks and other control characters: these values end up
+    // in text messages, the calendar file and the owner's dashboard.
+    const oneLine = (value: string) => value.replace(/[\u0000-\u001f\u007f]+/g, " ").trim();
+    const name = oneLine(input.customer_name).slice(0, 80);
+    const address = oneLine(input.address).slice(0, 160);
     const zip = input.zip.trim();
     if (!name || !address) return fail("Name and service address are required. Use request_customer_details.");
     if (!townForZip(zip)) {
@@ -499,8 +503,8 @@ const createBooking = define({
       serviceName: service.name,
       customerName: name,
       address,
-      phone: input.phone.trim().slice(0, 30),
-      email: input.email.trim().slice(0, 120),
+      phone: oneLine(input.phone).slice(0, 30),
+      email: oneLine(input.email).slice(0, 120),
       urgency: input.urgency,
       status: "pending_payment",
       source: "penny",

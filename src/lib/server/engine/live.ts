@@ -1,3 +1,4 @@
+import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { CitationView } from "@/lib/domain/types";
 import { DOCS } from "../docs";
@@ -38,6 +39,8 @@ export interface LiveConfig {
   maxSteps: number;
   /** Dev-only usage logging, so the X-ray numbers can be checked. */
   log?: (line: string) => void;
+  /** Called with each step's estimated cost, for the daily budget. */
+  onStepCost?: (usd: number) => void;
 }
 
 const EFFORTS: Effort[] = ["low", "medium", "high", "xhigh", "max"];
@@ -178,7 +181,10 @@ export function createLiveEngine(config: LiveConfig): Engine {
           cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0,
         };
         const ms = Math.round(performance.now() - started);
-        emit({ type: "usage", usage: { step, model: message.model, ...usage, costUsd: costUsd(message.model, usage) ?? costUsd(config.model, usage), ms } });
+        const stepCost = costUsd(message.model, usage) ?? costUsd(config.model, usage);
+        emit({ type: "usage", usage: { step, model: message.model, ...usage, costUsd: stepCost, ms } });
+        // A model missing from the price table is budgeted at the default model's rates.
+        config.onStepCost?.(stepCost ?? costUsd("claude-opus-5-5", usage) ?? 0);
         config.log?.(
           `[penny] step ${step} ${message.model} in=${usage.inputTokens} cache_read=${usage.cacheReadTokens} cache_write=${usage.cacheWriteTokens} out=${usage.outputTokens} ${ms}ms stop=${message.stop_reason}`,
         );

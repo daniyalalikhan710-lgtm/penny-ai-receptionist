@@ -1,3 +1,4 @@
+import "server-only";
 import type { EstimateView, Trade } from "@/lib/domain/types";
 
 /**

@@ -66,30 +66,36 @@ export const leadSchema = z.object({
   live: z.boolean(),
 });
 
+/** No control characters (which includes line breaks) in single-line form fields. */
+const singleLine = (max: number) => z.string().max(max).regex(/^[^\u0000-\u001f\u007f]*$/, "Must be a single line");
+const slotIdField = z.string().regex(/^[a-z]{2,12}\|\d{4}-\d{2}-\d{2}\|\d{3,4}$/);
+const bookingCodeField = z.string().regex(/^CPL-\d{4,6}$/);
+const serviceCodeField = z.string().regex(/^[A-Z][A-Z-]{1,29}$/);
+
 export const customerDetailsSchema = z.object({
-  name: z.string().min(1).max(80),
-  phone: z.string().min(7).max(30),
-  email: z.string().max(120),
-  address: z.string().min(3).max(160),
+  name: singleLine(80).min(1),
+  phone: z.string().regex(/^[0-9+() .-]{7,30}$/),
+  email: singleLine(120),
+  address: singleLine(160).min(3),
   zip: z.string().regex(/^\d{5}$/),
 });
 
 const uiEventSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("slot_selected"),
-    slotId: z.string().max(60),
+    slotId: slotIdField,
     purpose: z.enum(["booking", "reschedule"]),
-    bookingCode: z.string().max(20).nullable(),
-    serviceCode: z.string().max(30),
+    bookingCode: bookingCodeField.nullable(),
+    serviceCode: serviceCodeField,
   }),
   z.object({
     kind: z.literal("details_submitted"),
-    slotId: z.string().max(60),
-    serviceCode: z.string().max(30),
+    slotId: slotIdField,
+    serviceCode: serviceCodeField,
     details: customerDetailsSchema,
   }),
-  z.object({ kind: z.literal("payment_confirmed"), bookingCode: z.string().max(20) }),
-  z.object({ kind: z.literal("callback_requested"), phone: z.string().min(7).max(30) }),
+  z.object({ kind: z.literal("payment_confirmed"), bookingCode: bookingCodeField }),
+  z.object({ kind: z.literal("callback_requested"), phone: z.string().regex(/^[0-9+() .-]{7,30}$/) }),
   z.object({ kind: z.literal("handback") }),
 ]);
 

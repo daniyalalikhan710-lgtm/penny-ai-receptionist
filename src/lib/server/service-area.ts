@@ -1,3 +1,4 @@
+import "server-only";
 /**
  * Demo service area. "Riverbend" and its towns are fictional and the ZIP codes
  * are demo data; the UI labels them as such.
