@@ -2,7 +2,7 @@
 
 import { Camera, Sparkles } from "lucide-react";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { URGENCY_CLASS, urgencyLabel } from "@/lib/client/i18n";
@@ -67,12 +67,13 @@ function JobCard({ job, clock, onOpen }: { job: Job; clock: Clock; onOpen: (job:
       data-testid="job-card"
       data-status={job.status}
       onClick={() => onOpen(job)}
-      aria-label={`${job.code}: ${job.serviceName} for ${job.customerName}, ${PROGRESS_LABEL[progress]}${job.source === "penny" ? ", booked by Penny" : ""}`}
+      title={`${job.code} · ${urgencyLabel(job.urgency)} · open details`}
       className={cn(
         "flex h-full w-full flex-col gap-0.5 rounded-lg border border-l-4 bg-white p-1.5 text-left transition hover:shadow-md",
         urgency.bar,
         progress === "held" ? "animate-pulse-soft border-dashed border-copper-400 bg-copper-50" : "border-ink-100",
-        progress === "done" && "opacity-60",
+        // Finished jobs recede with a flat background, not opacity, so their text keeps its contrast.
+        progress === "done" && "bg-ink-50",
         landed && "animate-land ring-2 ring-copper-500",
         flying && "opacity-0",
       )}
@@ -80,8 +81,9 @@ function JobCard({ job, clock, onOpen }: { job: Job; clock: Clock; onOpen: (job:
       <span className="flex items-center gap-1">
         <span className="min-w-0 flex-1 truncate text-[11.5px] leading-tight font-semibold text-ink-900">{job.customerName}</span>
         {job.source === "penny" && (
-          <span title="Booked by Penny" className="flex shrink-0 items-center gap-0.5 rounded-full bg-copper-100 px-1 py-px text-[9px] font-bold text-copper-800">
-            <Sparkles className="size-2.5" aria-hidden /> Penny
+          <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-copper-100 px-1 py-px text-[9px] font-bold text-copper-800">
+            <Sparkles className="size-2.5" aria-hidden />
+            <span className="sr-only">Booked by </span>Penny
           </span>
         )}
       </span>
@@ -99,17 +101,32 @@ function JobCard({ job, clock, onOpen }: { job: Job; clock: Clock; onOpen: (job:
         >
           {PROGRESS_LABEL[progress]}
         </span>
-        <span className="ml-auto font-mono text-[9.5px] text-ink-500">{job.code.replace("CPL-", "#")}</span>
+        <span className="ml-auto font-mono text-[9.5px] text-ink-600">{job.code.replace("CPL-", "#")}</span>
       </span>
+      <span className="sr-only">Urgency: {urgencyLabel(job.urgency)}</span>
     </button>
   );
 }
 
 function JobDialog({ job, clock, onClose }: { job: Job | null; clock: Clock; onClose: () => void }) {
   const tech = TECHNICIANS.find((t) => t.id === job?.techId);
+  const lastCode = useRef<string | null>(null);
+  useEffect(() => {
+    if (job) lastCode.current = job.code;
+  }, [job]);
   return (
     <Dialog open={Boolean(job)} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent
+        className="max-w-md"
+        onCloseAutoFocus={(event) => {
+          // Return focus to the job card that opened the dialog.
+          const card = lastCode.current ? document.querySelector<HTMLElement>(`[data-job-code="${lastCode.current}"]`) : null;
+          if (card) {
+            event.preventDefault();
+            card.focus();
+          }
+        }}
+      >
         {job && (
           <>
             <DialogHeader>
@@ -169,7 +186,7 @@ export function DispatchBoard({ clock }: { clock: Clock }) {
         <h2 id="board-title" className="text-[13px] font-semibold text-ink-900">
           Dispatch board
         </h2>
-        <div role="tablist" aria-label="Day" className="scroll-thin -mx-1 flex min-w-0 flex-1 gap-1 overflow-x-auto px-1">
+        <div role="group" aria-label="Day shown on the board" className="scroll-thin -mx-1 flex min-w-0 flex-1 gap-1 overflow-x-auto px-1">
           {days.map((d) => {
             const count = jobs.filter((j) => j.date === d && j.status !== "cancelled").length;
             const selected = d === day;
@@ -177,8 +194,7 @@ export function DispatchBoard({ clock }: { clock: Clock }) {
               <button
                 key={d}
                 type="button"
-                role="tab"
-                aria-selected={selected}
+                aria-pressed={selected}
                 data-testid={`board-day-${d}`}
                 onClick={() => setBoardDay(d)}
                 className={cn(
@@ -187,7 +203,10 @@ export function DispatchBoard({ clock }: { clock: Clock }) {
                 )}
               >
                 {d === clock.today ? "Today" : fmtDay(d).split(",")[0] + " " + fmtDay(d).split(" ").pop()}
-                <span className={cn("rounded px-1 text-[10px] tabular-nums", selected ? "bg-white/20" : "bg-ink-100 text-ink-600")}>{count}</span>
+                <span className={cn("rounded px-1 text-[10px] tabular-nums", selected ? "bg-white/20" : "bg-ink-100 text-ink-600")}>
+                  {count}
+                  <span className="sr-only"> jobs</span>
+                </span>
               </button>
             );
           })}

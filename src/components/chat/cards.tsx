@@ -262,7 +262,7 @@ function Field({
       <input
         id={id}
         {...props}
-        className="h-9 w-full rounded-lg border border-ink-200 bg-white px-2.5 text-[13.5px] text-ink-900 placeholder:text-ink-400 disabled:bg-ink-50 disabled:text-ink-600"
+        className="h-9 w-full rounded-lg border border-ink-200 bg-white px-2.5 text-[13.5px] text-ink-900 placeholder:text-ink-500 disabled:bg-ink-50 disabled:text-ink-600"
       />
     </div>
   );

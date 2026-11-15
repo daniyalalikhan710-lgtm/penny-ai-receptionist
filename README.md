@@ -1,36 +1,167 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Penny: an AI receptionist for a home-services business
 
-## Getting Started
+Penny answers a plumbing and heating company's customers the moment they write in. She looks at their photo, quotes from the real price book, books a technician, takes the deposit and puts the job on the dispatch board, while the owner watches it happen.
 
-First, run the development server:
+**Live demo:** (link coming)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+![Split screen: a customer books a water heater repair with Penny on the left while the job lands on the owner's dispatch board on the right](docs/screenshots/04-booked.png)
+
+> **Copperline Plumbing & Heating is a fictional business.** The people, reviews, phone numbers, towns and ZIP codes are made up. No real payments, text messages or emails are sent. The checkout accepts only the `4242 4242 4242 4242` test card.
+
+A 30-second walkthrough of the golden path is in [`docs/demo.webm`](docs/demo.webm).
+
+## What it does
+
+The demo is a split screen. On the left is Copperline's website with Penny's chat widget; on the right is the owner's operations dashboard. Everything Penny does on the left shows up on the right as it happens.
+
+| | |
+|---|---|
+| **Photo diagnosis** | Send a photo and Penny returns a diagnosis card: what she sees, how urgent it is, safe things to do right now, and a price range from the price book. |
+| **Booking, end to end** | Real availability as a tappable slot picker, a details form, a deposit checkout and a confirmation with booking code, calendar file and SMS preview. |
+| **Grounded answers with citations** | Policy answers come from eight company documents. Each claim carries a chip that opens the source with the cited passage highlighted. |
+| **Emergency triage** | Gas smell, carbon monoxide, sparking or flooding: safety instructions first, a red alert on the dashboard, and an immediate callback offer. |
+| **Human takeover** | The owner clicks **Take over** on any conversation, replies from the dashboard, then hands back. Penny knows what was said. |
+| **Live owner dashboard** | KPIs, a dispatch board by technician and time, a leads inbox with AI summaries (always in English), and a log of messages sent. |
+| **Multilingual** | A customer who writes in Spanish gets Spanish back, including the cards. |
+| **X-ray mode** | For technical buyers: every tool call with its input and output, the citations used, tokens, cache reads, latency and cost, per turn. |
+| **Guardrails** | Penny says she is an AI when asked, stays on topic, and will not change prices, reveal her instructions or follow instructions written inside an image. |
+
+<table>
+<tr>
+<td><img src="docs/screenshots/02-diagnosis.png" alt="Photo diagnosis card with safe steps and an estimate"></td>
+<td><img src="docs/screenshots/06-emergency.png" alt="Emergency card and a red alert on the dashboard"></td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/07-citations.png" alt="Source document drawer with the cited passage highlighted"></td>
+<td><img src="docs/screenshots/05-xray.png" alt="X-ray panel showing tool calls for each turn"></td>
+</tr>
+</table>
+
+More screenshots, including mobile, are in [`docs/screenshots`](docs/screenshots). There is also a client-facing write-up at [`/case-study`](src/app/case-study/page.tsx).
+
+## Two engines, one interface
+
+Penny runs in one of two modes, chosen automatically:
+
+- **Live** when `ANTHROPIC_API_KEY` is set. Replies come from Claude through a streaming tool loop.
+- **Replay** when there is no key (or `PENNY_MODE=replay`). Scripts decide what Penny says and which tools to call for the suggested prompts and common variations. Anything else gets a short "live AI is switched off" reply, and the UI shows a **Replay mode** pill.
+
+Both engines emit the same event stream and call **the same server tool functions**. In replay mode the price book, availability, bookings, state patches, cards, dashboard, takeover and caps are all genuinely exercised; only the language model's choices are scripted. Replay also stays in the shipped product as a safety net: if the key is missing, invalid, or the daily live budget is used up, the demo falls back to replay instead of breaking.
+
+> **Status of this repo:** everything has been built and verified in replay mode. The live engine is fully written and covered by unit tests against a stubbed SDK client, but it has **not yet been run against the real API**. [`docs/live-verification.md`](docs/live-verification.md) is the checklist for that step.
+
+## Architecture
+
+```
+Browser                               Server (/api/chat)                    Sources of truth
+┌───────────────────────────┐  turn   ┌──────────────────────────────┐      ┌───────────────────┐
+│ Chat widget               │ ──────▶ │ zod validation, caps, limits │      │ Price book        │
+│ Owner dashboard           │         │                              │      │ Calendar logic    │
+│ Sandbox state (Zustand,   │ ◀────── │ Live engine  │ Replay engine │ ───▶ │ Company documents │
+│ localStorage, per visitor)│ events  │       └── same tools ──┘     │      │ Claude API        │
+└───────────────────────────┘         └──────────────────────────────┘      └───────────────────┘
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- **No database.** Each visitor gets an isolated sandbox (technicians, a 7-day calendar relative to their today, jobs, leads, messages) that lives in their browser and is wiped by **Reset demo**.
+- **The server holds the truth.** The system prompt, the documents and the price book never leave the server. The browser sends its sandbox with each turn; the server validates it with zod and re-checks every price and every slot against its own price book and availability logic before a tool acts on it.
+- **Tools return state patches.** A tool result carries what the model sees, a card for the customer, and a list of patches (`job.add`, `lead.update`, `alert.raise`, …). The client applies them, so both panes update from one event.
+- **The visitor pays, not the model.** `create_booking` only holds a slot. `/api/pay` confirms it, always for the price book's fee, and only then can `send_confirmation` succeed.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Key files:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Path | What it is |
+|---|---|
+| `src/lib/server/tools.ts` | The thirteen tools, shared by both engines |
+| `src/lib/server/engine/live.ts` | Streaming Claude tool loop |
+| `src/lib/server/engine/replay.ts` | Scripted engine and intent router |
+| `src/lib/server/engine/prompt.ts` | System prompt and deterministic history builder |
+| `src/lib/server/pricebook.ts`, `docs.ts` | Price book and the eight documents |
+| `src/lib/server/limits.ts` | Caps and rate limiting |
+| `src/lib/domain/` | Types, scheduling, state patches, seed data, the stream reducer |
+| `src/lib/client/store.ts` | The visitor's sandbox |
+| `evals/` | Behavioural eval suite |
 
-## Learn More
+## How it works
 
-To learn more about Next.js, take a look at the following resources:
+**Tool loop.** The live engine uses the official `@anthropic-ai/sdk` and a manual streaming loop: stream a step, forward text deltas, run any tool calls, send all results back in one message, repeat (capped at six steps). Tools are declared with `strict: true` schemas and every input is validated again with zod before it runs. The model is `ANTHROPIC_MODEL` (default `claude-opus-5-5`; `claude-haiku-5-5` also works) at `ANTHROPIC_EFFORT` (default `low`).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+**Citations.** The eight documents are sent as document blocks with citations enabled. Claude's cited spans come back as character ranges into the same plain text the drawer displays, so the highlight is exact. The pricing document is generated from the price book, so a cited price and a tool-returned price cannot disagree.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+**Prompt caching.** Tools, system prompt and documents are identical for every visitor and every turn, so they sit behind one cache breakpoint and are shared across all conversations. The conversation tail uses automatic caching. History is rebuilt deterministically from the transcript, so each request extends the previous one's prefix. X-ray mode shows the cache-read tokens on every step.
 
-## Deploy on Vercel
+**Refusals.** On models that support it the request opts into server-side refusal fallbacks. `stop_reason` is checked before content is used; a refusal that still comes back becomes a polite message, and a tool call cut off by `max_tokens` is never executed.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+**Cost per conversation.** Not measured yet: this build has no API key. An estimate from the prompt size (about 6,500 cached tokens) and published prices is roughly **10 to 15 cents on Claude Opus 5.5** for a full photo-to-paid-booking conversation of about ten model steps, and **under 1 cent on Claude Haiku 5.5**. The measured figure replaces this paragraph after the live verification step; X-ray mode reports the real cost of every turn.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+**Cost safety.** Server-side caps on messages per conversation, characters per message, total transcript size, photos per conversation, upload size, `max_tokens` and tool steps; a per-IP rate limit (Upstash Redis when configured, in-memory otherwise); and a global daily cap on live turns, after which Penny drops to replay. Each cap produces a friendly "demo limit reached" message.
+
+## Quality
+
+| Check | Result |
+|---|---|
+| `pnpm typecheck`, `pnpm lint`, `pnpm build` | Clean |
+| `pnpm test` (Vitest) | 77 tests: scheduling, pricing, documents, tools, replay scenarios, live engine against a stubbed SDK client, caps, rate limits, API routes |
+| `pnpm e2e` (Playwright) | 6 tests: golden path, emergency, citations, takeover, Spanish and reschedule, mobile |
+| `pnpm eval:replay` | 14 of 14 cases, 65 of 65 checks (2 cases need the live model and are skipped) |
+| `pnpm eval` (live) | Not run yet: no API key. Exits cleanly with "no API key, skipped" |
+| `pnpm a11y` (axe-core, WCAG 2.1 A/AA) | No violations across 13 screens and states |
+
+The eval suite scripts 16 conversations and asserts on which tools were called with which arguments and on the resulting state, not on wording: golden path, gas emergency, out-of-area ZIP, non-repair photo, Spanish, reschedule, warranty citation, price accuracy, prompt injection in text and inside an image, "are you human?", off-topic, an over-long message, rapid-fire spam, cancellation needing confirmation, and takeover hand-back.
+
+## Run it locally
+
+Requires Node 20+ and pnpm.
+
+```bash
+pnpm install
+cp .env.example .env.local   # optional: with no key, Penny runs in replay mode
+pnpm dev
+```
+
+Open http://localhost:3000. Adding `ANTHROPIC_API_KEY` to `.env.local` and restarting switches to live mode with no other change.
+
+```bash
+pnpm test          # unit tests
+pnpm e2e           # builds, then runs the Playwright tests in replay mode
+pnpm eval:replay   # eval suite through the replay engine (free)
+pnpm eval          # eval suite against the real API (needs a key, costs cents)
+pnpm a11y          # axe-core scan (needs the app running)
+pnpm screenshots   # regenerates docs/screenshots and docs/demo.webm (needs the app running)
+```
+
+## Environment variables
+
+All are documented in [`.env.example`](.env.example).
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | blank | Blank means replay mode. Use a dedicated key with a spend limit. |
+| `ANTHROPIC_MODEL` | `claude-opus-5-5` | Model for live mode. |
+| `ANTHROPIC_EFFORT` | `low` | Reasoning effort. Keep it constant; changing it invalidates the cache. |
+| `PENNY_MODE` | blank | Set to `replay` to force the scripted engine. |
+| `NEXT_PUBLIC_AUTHOR_NAME`, `NEXT_PUBLIC_HIRE_URL` | blank | "Built by … · Hire me" in the banner. The link is hidden if the URL is blank. |
+| `PENNY_MAX_TURNS`, `PENNY_MAX_MESSAGE_CHARS`, `PENNY_MAX_IMAGES`, `PENNY_MAX_TOKENS`, `PENNY_MAX_TRANSCRIPT_CHARS` | 30, 1500, 3, 4096, 60000 | Per-conversation caps. |
+| `PENNY_RATE_PER_MINUTE`, `PENNY_RATE_PER_DAY` | 20, 200 | Per-IP rate limits. |
+| `PENNY_DAILY_LIVE_TURNS` | 1500 | Global daily budget of live turns before falling back to replay. |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | blank | Optional shared rate limiting across serverless instances. |
+
+## Deploy to Vercel
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fdaniyalalikhan710-lgtm%2Fpenny-ai-receptionist&env=NEXT_PUBLIC_AUTHOR_NAME&envDescription=Optional%3A%20add%20ANTHROPIC_API_KEY%20for%20live%20mode.%20Without%20it%20Penny%20runs%20in%20replay%20mode.&envLink=https%3A%2F%2Fgithub.com%2Fdaniyalalikhan710-lgtm%2Fpenny-ai-receptionist%2Fblob%2Fmain%2F.env.example)
+
+No database or other services are needed. To go live after deploying, add `ANTHROPIC_API_KEY` (and optionally `ANTHROPIC_MODEL`) under Project → Settings → Environment Variables and redeploy. For a public link, also add the Upstash variables so the rate limit is shared across instances.
+
+## Roadmap
+
+Not built yet:
+
+- A guided four-step tour for first-time visitors.
+- Two-tab sync, so the owner view can sit in a second window.
+- Voice input through the Web Speech API.
+- Real integrations in place of the simulated ones: Stripe for the deposit, Twilio for texts, a calendar or field-service system for the board.
+
+## Credits and license
+
+Sample photos are from Unsplash; see [`CREDITS.md`](CREDITS.md). Design decisions made while building are logged in [`docs/decisions.md`](docs/decisions.md).
+
+MIT. See [`LICENSE`](LICENSE).

@@ -82,9 +82,9 @@ function TurnCard({ row }: { row: TurnRow }) {
 
       <div className="mt-2.5 grid gap-3 @3xl:grid-cols-[1.4fr_1fr]">
         <div className="min-w-0">
-          <h4 className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-ink-300 uppercase">
+          <h3 className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-ink-300 uppercase">
             <Wrench className="size-3.5" aria-hidden /> Tool calls ({tools.length})
-          </h4>
+          </h3>
           {tools.length === 0 ? (
             <p className="text-[12px] text-ink-400">No tools needed for this turn.</p>
           ) : (
@@ -118,9 +118,9 @@ function TurnCard({ row }: { row: TurnRow }) {
           )}
           {citations.length > 0 && (
             <>
-              <h4 className="mt-3 mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-ink-300 uppercase">
+              <h3 className="mt-3 mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-ink-300 uppercase">
                 <BookOpen className="size-3.5" aria-hidden /> Citations ({citations.length})
-              </h4>
+              </h3>
               <ul className="space-y-1">
                 {citations.map((c, i) => (
                   <li key={i} className="rounded-lg bg-ink-900 px-2 py-1.5 text-[11.5px] leading-snug text-ink-100">
@@ -135,9 +135,9 @@ function TurnCard({ row }: { row: TurnRow }) {
         </div>
 
         <div className="min-w-0">
-          <h4 className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-ink-300 uppercase">
+          <h3 className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-ink-300 uppercase">
             <Database className="size-3.5" aria-hidden /> Tokens &amp; cost
-          </h4>
+          </h3>
           {usage.length === 0 ? (
             <p className="rounded-lg bg-ink-900 px-2.5 py-2 text-[12px] leading-snug text-ink-300" data-testid="xray-no-usage">
               {live

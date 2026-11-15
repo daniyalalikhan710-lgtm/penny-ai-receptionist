@@ -16,7 +16,7 @@ import { FlightLayer } from "./flight-layer";
 
 function DemoBanner({ authorName, hireUrl }: { authorName: string; hireUrl: string }) {
   return (
-    <div className="on-dark flex shrink-0 flex-wrap items-center justify-center gap-x-3 gap-y-0.5 bg-ink-950 px-3 py-1.5 text-center text-[11px] leading-tight text-ink-200 sm:text-[11.5px]" data-testid="demo-banner">
+    <aside aria-label="About this demo" className="on-dark flex shrink-0 flex-wrap items-center justify-center gap-x-3 gap-y-0.5 bg-ink-950 px-3 py-1.5 text-center text-[11px] leading-tight text-ink-200 sm:text-[11.5px]" data-testid="demo-banner">
       <p>
         <span className="font-semibold text-copper-300">Live demo</span>
         <span aria-hidden> · </span>Copperline is a fictional business<span aria-hidden> · </span>No real payments<span className="max-sm:hidden"> or messages</span>
@@ -34,7 +34,7 @@ function DemoBanner({ authorName, hireUrl }: { authorName: string; hireUrl: stri
           ) : null}
         </p>
       ) : null}
-    </div>
+    </aside>
   );
 }
 
@@ -70,15 +70,14 @@ function TopBar({ wide, view }: { wide: boolean; view: ViewMode }) {
         </p>
       </div>
 
-      <div role="tablist" aria-label="View" className="mx-auto flex shrink-0 rounded-xl bg-ink-800 p-0.5">
+      <div role="group" aria-label="View" className="mx-auto flex shrink-0 rounded-xl bg-ink-800 p-0.5">
         {VIEWS.filter((v) => wide || !v.desktopOnly).map(({ id, label, icon: Icon }) => {
           const selected = view === id;
           return (
             <button
               key={id}
               type="button"
-              role="tab"
-              aria-selected={selected}
+              aria-pressed={selected}
               data-testid={`view-${id}`}
               onClick={() => setView(id)}
               className={cn(

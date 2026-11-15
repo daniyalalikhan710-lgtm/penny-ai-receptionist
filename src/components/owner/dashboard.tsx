@@ -427,7 +427,7 @@ function Outbox() {
           Simulated
         </span>
       </div>
-      <ul className="scroll-thin min-h-0 flex-1 divide-y divide-ink-100 overflow-y-auto" data-testid="outbox-list">
+      <ul className="scroll-thin min-h-0 flex-1 divide-y divide-ink-100 overflow-y-auto" data-testid="outbox-list" tabIndex={0} aria-labelledby="outbox-title">
         {outbox.map((message) => (
           <li key={message.id} className="animate-pop-in px-3 py-2.5" data-testid="outbox-item">
             <p className="flex items-center gap-1.5 text-[11px] text-ink-500">

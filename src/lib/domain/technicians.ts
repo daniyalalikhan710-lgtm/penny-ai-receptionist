@@ -8,7 +8,7 @@ export const TECHNICIANS: Technician[] = [
     initials: "MR",
     title: "Master plumber",
     trades: ["plumbing"],
-    color: "#B87333",
+    color: "#9A5B22",
   },
   {
     id: "priya",

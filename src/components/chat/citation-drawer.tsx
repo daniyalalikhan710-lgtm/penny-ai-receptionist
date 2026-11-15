@@ -59,6 +59,7 @@ export function CitationDrawer() {
   const [fetched, setFetched] = useState<Doc | null>(null);
   const [failedId, setFailedId] = useState<string | null>(null);
   const markRef = useRef<HTMLElement | null>(null);
+  const opener = useRef<HTMLElement | null>(null);
   const docId = citation?.docId ?? null;
   const doc = docId ? (cache.get(docId) ?? (fetched?.id === docId ? fetched : null)) : null;
   const error = Boolean(docId) && failedId === docId && !doc;
@@ -94,7 +95,22 @@ export function CitationDrawer() {
 
   return (
     <Sheet open={Boolean(citation)} onOpenChange={(open) => !open && openCitation(null)}>
-      <SheetContent side="right" className="flex w-full flex-col gap-0 bg-cream p-0 sm:max-w-md" data-testid="citation-drawer">
+      <SheetContent
+        side="right"
+        className="flex w-full flex-col gap-0 bg-cream p-0 sm:max-w-md"
+        data-testid="citation-drawer"
+        onOpenAutoFocus={() => {
+          // Opened from a chip in the chat, not a Radix trigger: remember it so
+          // focus can go back there when the drawer closes.
+          opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        }}
+        onCloseAutoFocus={(event) => {
+          if (opener.current?.isConnected) {
+            event.preventDefault();
+            opener.current.focus();
+          }
+        }}
+      >
         <SheetHeader className="border-b border-ink-100 bg-white px-5 py-4">
           <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-copper-700 uppercase">
             <BookOpen className="size-3.5" aria-hidden /> Source document
@@ -104,7 +120,7 @@ export function CitationDrawer() {
             Penny answered from this Copperline document. The passage she cited is highlighted.
           </SheetDescription>
         </SheetHeader>
-        <div className="scroll-thin min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        <div className="scroll-thin min-h-0 flex-1 overflow-y-auto px-5 py-4" tabIndex={0} role="region" aria-label="Document text">
           {error && <p role="alert" className="text-sm text-red-800">This document couldn&rsquo;t be loaded. Please try again.</p>}
           {!error && lines.length === 0 && (
             <div className="space-y-2" aria-hidden>

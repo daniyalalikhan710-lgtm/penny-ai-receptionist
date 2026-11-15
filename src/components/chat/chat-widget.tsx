@@ -51,7 +51,7 @@ function CitationChip({ citation }: { citation: PlacedCitation }) {
       data-testid="citation-chip"
       onClick={() => openCitation({ docId: citation.docId, start: citation.start, end: citation.end, quote: citation.quote })}
       title={`Source: ${citation.docTitle}`}
-      aria-label={`Source: ${citation.docTitle}. Open the cited passage.`}
+      aria-label={`${label}: open the cited passage in ${citation.docTitle}`}
       className="mx-0.5 inline-flex min-h-6 translate-y-[-1px] items-center gap-1 rounded-full border border-copper-200 bg-copper-50 px-1.5 align-middle text-[10.5px] leading-none font-semibold whitespace-nowrap text-copper-800 transition hover:border-copper-400 hover:bg-copper-100"
     >
       <BookOpen className="size-3" aria-hidden />
@@ -194,7 +194,7 @@ function MessageRow({ message, lang }: { message: ChatMessage; lang: Lang }) {
           </span>
           <div className="min-w-0">
             <p className="mb-0.5 text-[11px] font-semibold text-ink-600">
-              {message.name} · Copperline team <span className="font-normal text-ink-400">{fmtTime(message.atMin)}</span>
+              {message.name} · Copperline team <span className="font-normal text-ink-500">{fmtTime(message.atMin)}</span>
             </p>
             <div className="w-fit max-w-full rounded-2xl rounded-tl-md border border-copper-200 bg-copper-50 px-3.5 py-2.5 text-[14px] leading-relaxed whitespace-pre-wrap text-ink-900 shadow-sm">
               {message.text}
@@ -399,7 +399,7 @@ function Composer({ empty }: { empty: boolean }) {
           onKeyDown={onKeyDown}
           placeholder={paused ? `Reply to ${OWNER.name}…` : "Describe the problem…"}
           enterKeyHint="send"
-          className="max-h-28 min-h-10 flex-1 resize-none rounded-xl border border-ink-200 bg-white px-3 py-2 text-[14px] leading-snug text-ink-900 placeholder:text-ink-400"
+          className="max-h-28 min-h-10 flex-1 resize-none rounded-xl border border-ink-200 bg-white px-3 py-2 text-[14px] leading-snug text-ink-900 placeholder:text-ink-500"
         />
         <button
           type="submit"

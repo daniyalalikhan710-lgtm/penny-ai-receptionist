@@ -1,13 +1,13 @@
 # Progress
 
-Current phase: **1 – chat core (server done, UI next)**
+Current phase: **5 – ship** (audits done, final gate and push next)
 
 - [x] Phase 0: scaffold, domain model, seed data, price book, documents, sample photos
-- [x] Server: tools, replay engine, live engine, caps, rate limiting, API routes, unit tests
-- [ ] Client: store, chat widget, cards, Copperline site, dashboard
-- [ ] Phase 2–3 flows verified in the browser
-- [ ] Phase 4: X-ray, view switcher, mobile pass
-- [ ] Phase 5: evals, Playwright, README, audits, push
-- [ ] Phase 6: live verification doc (no API key present)
+- [x] Phase 1: chat core, tools, both engines, widget, cards
+- [x] Phase 2: diagnosis → booking → checkout → confirmation, lookup and reschedule
+- [x] Phase 3: owner dashboard, emergency triage, human takeover
+- [x] Phase 4: X-ray, multilingual, chips, view switcher, mobile pass, case-study page
+- [ ] Phase 5: audits (code review, security, accessibility, fresh eyes), README, screenshots, push
+- [ ] Phase 6: live verification. Blocked on an API key; see docs/live-verification.md
 
-Next step: build the client store and UI.
+Next step: apply the reviewers' findings, run the final gate, capture screenshots from the production build, push to GitHub.
