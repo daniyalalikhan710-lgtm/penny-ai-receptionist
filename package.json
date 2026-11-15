@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "e2e": "playwright test",
     "eval": "tsx evals/run.ts",
-    "eval:replay": "tsx evals/run.ts --replay"
+    "eval:replay": "tsx evals/run.ts --replay",
+    "screenshots": "tsx scripts/screenshots.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
