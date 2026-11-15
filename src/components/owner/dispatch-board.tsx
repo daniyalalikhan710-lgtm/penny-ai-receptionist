@@ -186,7 +186,7 @@ export function DispatchBoard({ clock }: { clock: Clock }) {
         <h2 id="board-title" className="text-[13px] font-semibold text-ink-900">
           Dispatch board
         </h2>
-        <div role="group" aria-label="Day shown on the board" className="scroll-thin -mx-1 flex min-w-0 flex-1 gap-1 overflow-x-auto px-1">
+        <div role="group" aria-label="Day shown on the board" className="scroll-thin relative -mx-1 flex min-w-0 flex-1 gap-1 overflow-x-auto px-1">
           {days.map((d) => {
             const count = jobs.filter((j) => j.date === d && j.status !== "cancelled").length;
             const selected = d === day;
@@ -213,7 +213,7 @@ export function DispatchBoard({ clock }: { clock: Clock }) {
         </div>
       </div>
 
-      <div className="scroll-thin overflow-x-auto p-2">
+      <div className="scroll-thin relative overflow-x-auto p-2">
         <div role="table" aria-label={`Jobs for ${fmtDayRelative(day, clock.today)}`} className="grid min-w-[680px] grid-cols-[92px_repeat(5,minmax(0,1fr))] gap-1">
           <div role="row" className="contents">
             <div role="columnheader">

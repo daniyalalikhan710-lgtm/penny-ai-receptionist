@@ -184,5 +184,17 @@ test("mobile: tabs instead of a split screen, and the chat fits 375px", async ({
   await page.getByTestId("view-owner").click();
   await expect(page.getByTestId("dashboard")).toBeVisible();
   await expect(page.getByTestId("kpi-booked")).toHaveAttribute("data-value", "4");
+  const ownerOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(ownerOverflow).toBeLessThanOrEqual(0);
+
+  // The emergency banner must stay readable on a phone.
+  await page.getByTestId("view-customer").click();
+  await page.getByRole("button", { name: "I smell gas in my kitchen" }).click();
+  await expect(page.getByTestId("card-emergency")).toBeVisible();
+  await page.getByTestId("view-owner").click();
+  const alert = page.getByTestId("emergency-alert");
+  await expect(alert).toBeVisible();
+  const box = await alert.boundingBox();
+  expect(box?.height ?? 999).toBeLessThan(260);
   await context.close();
 });

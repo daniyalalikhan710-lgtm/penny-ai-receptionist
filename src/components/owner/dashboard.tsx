@@ -159,7 +159,9 @@ function AlertBanner() {
           className="on-dark flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-red-700 px-3.5 py-2.5 text-white shadow-lg motion-safe:animate-alert"
         >
           <ShieldAlert className="size-6 shrink-0" aria-hidden />
-          <div className="min-w-0 flex-1">
+          {/* A minimum width makes the buttons wrap below the text on phones
+              instead of squeezing the text into a one-word column. */}
+          <div className="min-w-[13rem] flex-1">
             <p className="text-[14px] leading-tight font-bold">
               EMERGENCY · {alert.headline} <span className="font-medium text-red-100">· {fmtTime(alert.atMin)}</span>
             </p>

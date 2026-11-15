@@ -328,19 +328,27 @@ function Composer({ empty }: { empty: boolean }) {
         <div className="px-3 pt-2.5" data-testid="suggestions">
           <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-ink-500 uppercase">{empty ? "Try one of these" : "More to try"}</p>
           <ul className="flex flex-wrap gap-1.5">
-            {SUGGESTIONS.map((s) => (
-              <li key={s.label}>
-                <button
-                  type="button"
-                  disabled={sending || paused}
-                  onClick={() => sendSuggestion(s)}
-                  className="flex min-h-8 items-center gap-1.5 rounded-full border border-ink-200 bg-cream px-3 py-1 text-left text-[12.5px] leading-snug font-medium text-ink-800 transition hover:border-copper-400 hover:bg-copper-50 disabled:opacity-50"
-                >
-                  {s.sampleId ? <Camera className="size-3.5 shrink-0 text-copper-600" aria-label="With a sample photo:" /> : null}
-                  {s.label}
-                </button>
-              </li>
-            ))}
+            {SUGGESTIONS.map((s, i) => {
+              // On a fresh chat the photo prompt is the one to start with.
+              const startHere = empty && i === 0;
+              return (
+                <li key={s.label}>
+                  <button
+                    type="button"
+                    disabled={sending || paused}
+                    onClick={() => sendSuggestion(s)}
+                    className={cn(
+                      "flex min-h-8 items-center gap-1.5 rounded-full border px-3 py-1 text-left text-[12.5px] leading-snug font-medium text-ink-800 transition hover:border-copper-400 hover:bg-copper-50 disabled:opacity-50",
+                      startHere ? "border-copper-500 bg-copper-50 shadow-[0_0_0_3px_rgb(184_115_51/0.18)]" : "border-ink-200 bg-cream",
+                    )}
+                  >
+                    {s.sampleId ? <Camera className="size-3.5 shrink-0 text-copper-600" aria-label="With a sample photo:" /> : null}
+                    {s.label}
+                    {startHere ? <span className="rounded-full bg-copper-600 px-1.5 py-px text-[9.5px] font-bold tracking-wide text-white uppercase">Start here</span> : null}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
