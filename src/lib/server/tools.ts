@@ -97,6 +97,11 @@ function slotLabel(slot: Pick<SlotOption, "date" | "startMin" | "durationMin">, 
   return `${fmtDayRelative(slot.date, clock.today, lang)}, ${fmtWindow(slot.startMin, slot.durationMin)}`;
 }
 
+/** "Tomorrow, 2:00–4:00 PM" reads wrong mid-sentence; "tomorrow, 2:00–4:00 PM" does not. */
+export function inlineLabel(label: string): string {
+  return label.replace(/^(Today|Tomorrow|Hoy|Mañana)/, (word) => word.toLowerCase());
+}
+
 const SLOT_PROBLEMS: Record<SlotProblem, string> = {
   unknown_slot: "That slot id is not valid. Call find_available_slots again and use one of the returned ids.",
   outside_horizon: "That date is outside the 7-day booking calendar.",
@@ -120,7 +125,7 @@ function smsMessage(id: string, to: string, body: string, clock: Clock, jobCode:
 
 function confirmationSms(job: Job, clock: Clock, lang: Lang, variant: "booked" | "rescheduled"): string {
   const tech = techById(job.techId)?.name ?? "your technician";
-  const when = slotLabel(job, clock, lang);
+  const when = inlineLabel(slotLabel(job, clock, lang));
   if (lang === "es") {
     const lead = variant === "booked" ? "su visita está confirmada" : "su visita se cambió";
     return `${COMPANY.short}: ${lead}. ${job.code}: ${when} con ${tech}. Le avisaremos cuando vaya en camino. Responda para cambiarla.`;
@@ -555,8 +560,11 @@ const sendConfirmation = define({
       id: `out-${job.code}-email-${stamp}`,
       channel: "email",
       to: job.email || job.customerName,
-      subject: `Your Copperline visit is confirmed (${job.code})`,
-      body: `Hi ${job.customerName.split(" ")[0]}, your ${job.serviceName.toLowerCase()} visit is booked for ${slotLabel(job, ctx.clock)} with ${techById(job.techId)?.name ?? "your technician"} at ${job.address}. Your $${job.feeDue} diagnostic fee is paid and will be credited toward the repair.`,
+      subject: lang === "es" ? `Su visita de Copperline está confirmada (${job.code})` : `Your Copperline visit is confirmed (${job.code})`,
+      body:
+        lang === "es"
+          ? `Hola ${job.customerName.split(" ")[0]}: su visita (${job.serviceName}) está reservada para ${inlineLabel(slotLabel(job, ctx.clock, "es"))} con ${techById(job.techId)?.name ?? "su técnico"} en ${job.address}. El diagnóstico de $${job.feeDue} está pagado y se descontará de la reparación.`
+          : `Hi ${job.customerName.split(" ")[0]}, your ${job.serviceName.toLowerCase()} visit is booked for ${inlineLabel(slotLabel(job, ctx.clock))} with ${techById(job.techId)?.name ?? "your technician"} at ${job.address}. Your $${job.feeDue} diagnostic fee is paid and will be credited toward the repair.`,
       day: ctx.clock.today,
       atMin: ctx.clock.nowMinutes,
       jobCode: job.code,

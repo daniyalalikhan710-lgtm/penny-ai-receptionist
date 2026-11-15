@@ -7,7 +7,8 @@ import type { Lang, UiEvent, Urgency, WireMessage } from "@/lib/domain/types";
 import { locateQuote, docById, pricingQuote } from "../docs";
 import { DIAGNOSTIC_FEE, MEMBER_DISCOUNT_PCT, serviceByCode } from "../pricebook";
 import { extractZip } from "../service-area";
-import type { ToolContext, ToolOutcome } from "../tools";
+import { inlineLabel, type ToolContext, type ToolOutcome } from "../tools";
+import { COMPANY } from "@/lib/domain/technicians";
 import {
   detectLang,
   runToolWithEvents,
@@ -126,7 +127,7 @@ function slotText(r: Replay, slotIdValue: string, lang: Lang = r.lang): { when: 
   const parsed = parseSlotId(slotIdValue);
   if (!parsed) return null;
   return {
-    when: `${fmtDayRelative(parsed.date, r.input.clock.today, lang).toLowerCase()}, ${fmtWindow(parsed.startMin, SLOT_DURATION)}`,
+    when: inlineLabel(`${fmtDayRelative(parsed.date, r.input.clock.today, lang)}, ${fmtWindow(parsed.startMin, SLOT_DURATION)}`),
     tech: techById(parsed.techId)?.name.split(" ")[0] ?? "your technician",
   };
 }
@@ -361,9 +362,30 @@ function photoScript(sampleId: string): Script {
         await r.say(" I couldn't find an open window this week. Would you like a call back from our office?");
       } else {
         await r.say("Tap a time and I'll hold it for you.");
+        await afterHoursNote(r, script.severity, slots);
       }
     },
   };
+}
+
+/**
+ * Outside working hours the first open window is tomorrow. For something
+ * urgent, say what the documents promise: emergency dispatch around the clock.
+ */
+async function afterHoursNote(r: Replay, urgency: Urgency, offered: ToolOutcome): Promise<void> {
+  if (urgency !== "urgent" && urgency !== "emergency") return;
+  const card = offered.card;
+  const sameDay = card?.kind === "slots" && card.slots.some((slot) => slot.date === r.input.clock.today);
+  if (sameDay || offered.isError) return;
+  await r.say(
+    r.t(
+      " If it can't wait until then, tell me and I'll have our after-hours dispatcher call you: emergency dispatch runs around the clock,",
+      " Si no puede esperar hasta entonces, dígamelo y haré que le llame nuestro despachador nocturno: el servicio de emergencia funciona las 24 horas,",
+    ),
+  );
+  r.cite("service-area", "Emergency dispatch for active leaks, no heat in freezing weather and similar urgent problems is available around the clock");
+  await r.say(r.t(" with a flat after-hours surcharge.", " con un recargo fijo fuera de horario."));
+  r.cite("pricing", "Visits that start outside those hours add a flat $95 after-hours surcharge.");
 }
 
 /* ------------------------------------------------------------------ */
@@ -409,12 +431,13 @@ function eventScript(event: UiEvent, messages: WireMessage[]): Script {
         run: async (r) => {
           await r.think();
           const slot = slotText(r, event.slotId);
+          await r.say(r.t(`Good choice: ${slot?.when} with ${slot?.tech}.`, `Buena elección: ${slot?.when} con ${slot?.tech}.`));
           const result = await r.call("request_customer_details", { slot_id: event.slotId, service_code: event.serviceCode });
           if (result.isError) {
             await r.say(
               r.t(
-                "That window was just taken, sorry. Here are the current openings:",
-                "Ese horario acaba de ocuparse, disculpe. Estos son los horarios disponibles:",
+                " I'm sorry, that window was just taken. Here are the current openings:",
+                " Disculpe, ese horario acaba de ocuparse. Estos son los horarios disponibles:",
               ),
             );
             await r.call("find_available_slots", {
@@ -427,8 +450,8 @@ function eventScript(event: UiEvent, messages: WireMessage[]): Script {
           }
           await r.say(
             r.t(
-              `Good choice: ${slot?.when} with ${slot?.tech}. Please check these details so the technician knows where to go.`,
-              `Buena elección: ${slot?.when} con ${slot?.tech}. Revise estos datos para que el técnico sepa a dónde ir.`,
+              "Please check these details so the technician knows where to go.",
+              "Revise estos datos para que el técnico sepa a dónde ir.",
             ),
           );
         },
@@ -452,8 +475,26 @@ function eventScript(event: UiEvent, messages: WireMessage[]): Script {
             urgency: r.lead.urgency,
           });
           if (result.isError) {
-            await r.say(r.t("I couldn't hold that visit: ", "No pude reservar esa visita: "));
-            await r.say(String(result.output.error));
+            const reason = String(result.output.error);
+            if (/outside the service area/.test(reason)) {
+              await r.say(
+                r.t(
+                  `I'm sorry, ${d.zip} is outside the area we serve, so I can't book a visit at that address. If the ZIP code was a typo, correct it in the form above and confirm again.`,
+                  `Lo siento, ${d.zip} está fuera de nuestra zona de servicio, así que no puedo agendar una visita en esa dirección. Si el código postal tenía un error, corríjalo en el formulario de arriba y confirme de nuevo.`,
+                ),
+              );
+              r.cite("service-area", "If your ZIP code is not listed, we cannot schedule a visit there.");
+            } else if (/just taken|already started|too soon/.test(reason)) {
+              await r.say(r.t("I'm sorry, that window is no longer available. Here are the current openings:", "Disculpe, ese horario ya no está disponible. Estos son los horarios actuales:"));
+              await r.call("find_available_slots", { service_code: event.serviceCode, urgency: r.lead.urgency, preferred_date: null, reschedule_booking_code: null });
+            } else {
+              await r.say(
+                r.t(
+                  "I couldn't hold that visit with those details. Please check the form above and confirm again.",
+                  "No pude reservar la visita con esos datos. Revise el formulario de arriba y confirme de nuevo.",
+                ),
+              );
+            }
             return;
           }
           const slot = slotText(r, event.slotId);
@@ -524,6 +565,15 @@ function eventScript(event: UiEvent, messages: WireMessage[]): Script {
             await r.say(r.t("That number doesn't look right. Could you check it?", "Ese número no parece correcto. ¿Puede revisarlo?"));
             return;
           }
+          await r.call("update_lead", {
+            summary_en: emergency
+              ? `${r.lead.summary} Callback requested on ${event.phone}; Penny told the customer a dispatcher will call within 5 minutes.`.trim().slice(0, 380)
+              : `Customer asked to speak with a person. Callback requested on ${event.phone}.`,
+            intent: emergency ? "emergency" : "other",
+            urgency: r.lead.urgency,
+            customer_language: r.lang,
+            customer_name: null,
+          });
           await r.say(
             emergency
               ? r.t(
@@ -553,10 +603,17 @@ function eventScript(event: UiEvent, messages: WireMessage[]): Script {
           const quote = staff.text.length > 160 ? `${staff.text.slice(0, 157)}…` : staff.text;
           await r.say(
             r.t(
-              `Thanks, ${staff.name}. I'm back with you${hello}, and I've read what ${staff.name} wrote: “${quote}” I'll pick up from there. Is there anything else you need?`,
-              `Gracias, ${staff.name}. Ya estoy de vuelta${hello} y leí lo que escribió ${staff.name}: “${quote}” Continúo desde ahí. ¿Necesita algo más?`,
+              `Thanks, ${staff.name}. I'm back with you${hello}. So we're on the same page, ${staff.name}'s note was: “${quote}” Is there anything else I can help with?`,
+              `Gracias, ${staff.name}. Ya estoy de vuelta${hello}. Para que quede claro, la nota de ${staff.name} fue: “${quote}” ¿Le ayudo con algo más?`,
             ),
           );
+          await r.call("update_lead", {
+            summary_en: `${r.lead.summary ? `${r.lead.summary} ` : ""}${staff.name} took over the chat and told the customer: “${quote}” Handed back to Penny.`.slice(0, 390),
+            intent: r.lead.intent,
+            urgency: r.lead.urgency,
+            customer_language: r.lang,
+            customer_name: null,
+          });
         },
       };
   }
@@ -866,8 +923,8 @@ function rescheduleScript(code: string): Script {
       const first = out.customer?.split(" ")[0];
       await r.say(
         r.t(
-          `Found it${first ? `, ${first}` : ""}: your ${out.service?.toLowerCase()} with ${out.technician?.split(" ")[0]}, ${out.when?.toLowerCase()}.`,
-          `La encontré${first ? `, ${first}` : ""}: ${out.service?.toLowerCase()} con ${out.technician?.split(" ")[0]}, ${out.when?.toLowerCase()}.`,
+          `Found it${first ? `, ${first}` : ""}: your ${out.service?.toLowerCase()} with ${out.technician?.split(" ")[0]}, ${inlineLabel(out.when ?? "")}.`,
+          `La encontré${first ? `, ${first}` : ""}: ${out.service?.toLowerCase()} con ${out.technician?.split(" ")[0]}, ${inlineLabel(out.when ?? "")}.`,
         ),
       );
       const slots = await r.call("find_available_slots", {
@@ -909,9 +966,16 @@ function cancelAskScript(code: string): Script {
         await r.say("That booking is already cancelled.");
         return;
       }
-      await r.say(`I found ${code}: your ${out.service?.toLowerCase()}, ${out.when?.toLowerCase()}. Do you want me to cancel it? Just reply “yes, cancel it” to confirm.`);
+      await r.say(`I found ${code}: your ${out.service?.toLowerCase()}, ${inlineLabel(out.when ?? "")}. Do you want me to cancel it? Just reply “yes, cancel it” to confirm.`);
       await r.say(" If the timing is the problem, I can move it instead at no charge.");
       r.cite("booking-policy", "You can reschedule free of charge up to 2 hours before your arrival window starts.");
+      await r.call("update_lead", {
+        summary_en: `Asked to cancel ${code} (${out.service}); Penny is waiting for the customer to confirm.`,
+        intent: "cancel",
+        urgency: "routine",
+        customer_language: r.lang,
+        customer_name: null,
+      });
     },
   };
 }
@@ -929,6 +993,13 @@ function cancelConfirmScript(code: string): Script {
       await r.say(`Done. ${code} is cancelled. ${String(result.output.refund)}`);
       r.cite("booking-policy", "Cancel at least 24 hours before your window and the diagnostic fee is refunded in full.");
       await r.say(" I've sent a text to confirm. If you'd like to rebook later, I'm here.");
+      await r.call("update_lead", {
+        summary_en: `Cancelled ${code} at the customer's request after they confirmed. ${String(result.output.refund)}`,
+        intent: "cancel",
+        urgency: "routine",
+        customer_language: r.lang,
+        customer_name: null,
+      });
     },
   };
 }
@@ -964,7 +1035,7 @@ function priceScript(code: string): Script {
       r.cite("pricing", pricingQuote(code));
       await r.say(
         r.t(
-          ` Every visit starts with a ${money(DIAGNOSTIC_FEE)} diagnostic, which is credited toward the repair, and the technician gives you a fixed price before any work starts.`,
+          ` Every visit starts with a diagnostic (${money(DIAGNOSTIC_FEE)}, credited toward the repair), and the technician gives you a fixed price before any work starts.`,
           ` Cada visita empieza con un diagnóstico de ${money(DIAGNOSTIC_FEE)}, que se descuenta de la reparación, y el técnico le da un precio fijo antes de empezar.`,
         ),
       );
@@ -985,7 +1056,7 @@ const genericPriceScript: Script = {
   id: "price_generic",
   run: async (r) => {
     await r.think();
-    await r.say(`Every visit starts with a ${money(DIAGNOSTIC_FEE)} diagnostic, and that fee comes off the repair if you go ahead.`);
+    await r.say(`Every visit starts with a diagnostic. It costs ${money(DIAGNOSTIC_FEE)}, and that comes off the repair if you go ahead.`);
     r.cite("pricing", CREDIT_QUOTE);
     await r.say(" Prices depend on the job, and I can give you the range from our price book. What needs fixing?");
   },
@@ -1014,7 +1085,7 @@ function problemScript(code: string, text: string, preferTomorrow: boolean): Scr
       await r.say(
         r.t(
           `We can help with that. ${out.service} typically runs ${money(out.price_low_usd)} to ${money(out.price_high_usd)},`,
-          `¡Claro que sí! ${serviceNameEs(code) ?? out.service} suele costar entre ${money(out.price_low_usd)} y ${money(out.price_high_usd)},`,
+          `Con gusto le ayudamos. ${serviceNameEs(code) ?? out.service} suele costar entre ${money(out.price_low_usd)} y ${money(out.price_high_usd)},`,
         ),
       );
       r.cite("pricing", pricingQuote(code));
@@ -1044,8 +1115,75 @@ function problemScript(code: string, text: string, preferTomorrow: boolean): Scr
       } else {
         await r.say(r.t("\n\nHere are the earliest openings. Tap a time and I'll hold it.", "\n\nEstos son los primeros horarios disponibles. Toque uno y se lo reservo."));
       }
+      await afterHoursNote(r, urgency, slots);
     },
   };
+}
+
+const contactScript: Script = {
+  id: "contact",
+  run: async (r) => {
+    await r.think();
+    await r.say(
+      r.t(
+        `You can reach the Copperline office on ${COMPANY.phone}. Technicians are out 8 AM to 6 PM, seven days a week,`,
+        `Puede llamar a la oficina de Copperline al ${COMPANY.phone}. Los técnicos trabajan de 8 AM a 6 PM, los siete días,`,
+      ),
+    );
+    r.cite("service-area", "Technicians are on the road 8:00 AM to 6:00 PM, seven days a week.");
+    await r.say(r.t(" and I can book a visit for you right here if that's easier.", " y si prefiere, le agendo una visita aquí mismo."));
+  },
+};
+
+const whatsWrongScript: Script = {
+  id: "whats_wrong",
+  run: async (r) => {
+    await r.think();
+    await r.say(
+      r.t(
+        "Happy to get someone out to you. What's going on? A sentence is enough (for example “my water heater is leaking” or “the AC isn't cooling”), or tap the camera and send a photo, and I'll give you a price range and the earliest times.",
+        "Con gusto le enviamos a alguien. ¿Qué sucede? Basta una frase (por ejemplo “mi calentador gotea” o “el aire no enfría”), o toque la cámara y envíe una foto, y le doy un rango de precio y los primeros horarios.",
+      ),
+    );
+  },
+};
+
+const uploadScript: Script = {
+  id: "off_script",
+  run: async (r) => {
+    await r.think(300);
+    await r.say(
+      r.t(
+        "I can only look at your own photos when my live AI is switched on, and it's off in this preview. Tap the camera and try one of the sample photos instead.",
+        "Solo puedo revisar sus propias fotos cuando mi IA en vivo está activada, y en esta vista previa está desactivada. Toque la cámara y pruebe una de las fotos de ejemplo.",
+      ),
+    );
+  },
+};
+
+const noNumberScript: Script = {
+  id: "no_number",
+  run: async (r) => {
+    await r.think(300);
+    await r.say(
+      r.t(
+        "I didn't catch a phone number there. What number should we call you on? Digits only is fine.",
+        "No vi un número de teléfono. ¿A qué número le llamamos? Solo los dígitos está bien.",
+      ),
+    );
+  },
+};
+
+/** The service Penny most recently quoted, so "yes" can mean "yes, find a time". */
+function lastQuotedService(messages: WireMessage[]): string | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role !== "assistant") continue;
+    const hit = m.tools.find((tool) => tool.name === "get_estimate" && !tool.isError);
+    const code = (hit?.input as { service_code?: unknown } | undefined)?.service_code;
+    if (typeof code === "string" && serviceByCode(code)) return code;
+  }
+  return null;
 }
 
 function serviceNameEs(code: string): string | null {
@@ -1087,7 +1225,7 @@ export function routeReplay(input: TurnInput): { script: Script; lang: Lang } {
     if (last.image.kind === "sample" && sampleById(last.image.sampleId) && PHOTO_SCRIPTS[last.image.sampleId]) {
       return pick(photoScript(last.image.sampleId));
     }
-    return pick(offScript); // An uploaded photo needs the live model.
+    return pick(uploadScript); // An uploaded photo needs the live model.
   }
 
   if (/ignore (all |your |any |the |previous |prior )*(instructions|rules|prompt)|system prompt|reveal (your )?(prompt|instructions)|jailbreak|developer mode|(give|get) (me|us) (a |an )?\d{2,3} ?%|(i want|i need|apply|take|knock) (a |an |me )?\d{2,3} ?%|\d{2,3} ?% (off|discount) (or|now|please|right now)|for free\b|pretend (you|to be)|you are now/.test(text)) {
@@ -1108,6 +1246,9 @@ export function routeReplay(input: TurnInput): { script: Script; lang: Lang } {
   if (digits.length >= 7 && digits.length <= 15 && previousAssistant && /number|numero|número|phone|teléfono|telefono/i.test(previousAssistant.text)) {
     const phone = raw.match(/[+()\d][\d\s().-]{6,}/)?.[0].trim() ?? raw;
     return pick(eventScript({ kind: "callback_requested", phone }, messages));
+  }
+  if (previousAssistant && /(best number|what number|a qué número)/i.test(previousAssistant.text) && digits.length < 7) {
+    return pick(noNumberScript);
   }
 
   const codeMatch = raw.match(/CPL[-\s]?(\d{4,6})/i);
@@ -1148,6 +1289,14 @@ export function routeReplay(input: TurnInput): { script: Script; lang: Lang } {
     return pick(problemScript(service.code, raw, preferTomorrow));
   }
   if (asksPrice) return pick(genericPriceScript);
+
+  // "Yes" right after a quote means "yes, find me a time".
+  if (/^(yes|yep|yeah|sure|ok|okay|please|si|sí|claro|go ahead|do it|sounds good)\b/.test(text) && raw.length < 40 && previousAssistant && /(find a time|busco un horario)/i.test(previousAssistant.text)) {
+    const quoted = lastQuotedService(messages);
+    if (quoted) return pick(problemScript(quoted, serviceByCode(quoted)?.name ?? raw, false));
+  }
+  if (/phone number|your number|call (you|the office)|contact|email address|where are you|your address|numero de telefono|como los contacto/.test(text)) return pick(contactScript);
+  if (/plumber|technician|someone (to |out|come)|appointment|\bbook\b|schedule|a visit|need help|fix (it|this|my)|repair|plomero|tecnico|una cita|necesito ayuda/.test(text)) return pick(whatsWrongScript);
 
   if (/^(hi|hello|hey|hola|buenas|good (morning|afternoon|evening))\b/.test(text) && raw.length < 40) return pick(greetingScript);
   if (/^(thanks|thank you|thx|gracias|great|perfect|ok|okay|cool)\b/.test(text) && raw.length < 40) return pick(thanksScript);

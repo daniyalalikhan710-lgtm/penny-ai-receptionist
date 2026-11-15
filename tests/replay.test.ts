@@ -195,12 +195,14 @@ describe("replay: scripted scenarios", () => {
   it("only cancels after an explicit confirmation", async () => {
     const d = new DemoDriver();
     await d.send("I need to cancel CPL-4821");
-    expect(d.toolNames()).toEqual(["lookup_booking"]);
+    expect(d.toolNames()).toEqual(["lookup_booking", "update_lead"]);
+    expect(d.lastText).toContain("Thu, Nov 19, 10:00 AM"); // the date keeps its capitals mid-sentence
     expect(d.job(SEEDED_BOOKING_CODE)?.status).toBe("confirmed");
     await d.send("yes, cancel it");
     expect(d.tool("cancel_booking")?.input).toMatchObject({ booking_code: SEEDED_BOOKING_CODE, customer_confirmed: true });
     expect(d.job(SEEDED_BOOKING_CODE)?.status).toBe("cancelled");
     expect(d.card("cancelled")?.refundNote).toMatch(/refunded in full/);
+    expect(d.state.lead.summary).toMatch(/^Cancelled CPL-4821/);
   });
 
   it("says plainly that Penny is an AI", async () => {
@@ -233,7 +235,8 @@ describe("replay: scripted scenarios", () => {
     expect(d.lastText).toBe(OFF_SCRIPT_EN);
     expect(d.toolNames()).toEqual([]);
     await d.sendUpload("what is this", { mediaType: "image/png", dataBase64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==" });
-    expect(d.lastText).toBe(OFF_SCRIPT_EN);
+    expect(d.lastText).toMatch(/sample photos/);
+    expect(d.toolNames()).toEqual([]);
   });
 
   it("knows what the owner said after a takeover", async () => {
@@ -252,5 +255,74 @@ describe("replay: scripted scenarios", () => {
     await d.send("555-010-0142");
     expect(d.tool("request_callback")?.input).toMatchObject({ priority: "standard" });
     expect(d.state.lead.status).toBe("needs_human");
+  });
+});
+
+describe("replay: details a first-time visitor pokes at", () => {
+  it("keeps dates capitalised and relative days lower-case mid-sentence", async () => {
+    const d = new DemoDriver();
+    await d.send("Reschedule my appointment CPL-4821");
+    expect(d.lastText).toMatch(/with Priya, Thu, Nov 19, 10:00 AM–12:00 PM\./);
+    const golden = new DemoDriver();
+    await golden.sendSample("My water heater is leaking", "water-heater");
+    const slot = golden.card("slots")!.slots[0];
+    await golden.event({ kind: "slot_selected", slotId: slot.id, purpose: "booking", bookingCode: null, serviceCode: "WH-REPAIR" });
+    expect(golden.lastText).toMatch(/Good choice: today, 2:00–4:00 PM with Marcus\./);
+    await golden.event({ kind: "details_submitted", slotId: slot.id, serviceCode: "WH-REPAIR", details: golden.card("details")!.prefill });
+    golden.pay("CPL-4822");
+    await golden.event({ kind: "payment_confirmed", bookingCode: "CPL-4822" });
+    expect(golden.card("confirmation")?.smsPreview).toContain("CPL-4822: today, 2:00–4:00 PM with Marcus Reyes");
+  });
+
+  it("explains an out-of-area ZIP in plain words", async () => {
+    const d = new DemoDriver();
+    await d.send("My toilet keeps running");
+    const slot = d.card("slots")!.slots[0];
+    await d.event({ kind: "slot_selected", slotId: slot.id, purpose: "booking", bookingCode: null, serviceCode: "TOILET-REPAIR" });
+    await d.event({ kind: "details_submitted", slotId: slot.id, serviceCode: "TOILET-REPAIR", details: { ...d.card("details")!.prefill, zip: "97520" } });
+    expect(d.lastText).toMatch(/97520 is outside the area we serve/);
+    expect(d.lastText).not.toMatch(/cannot be booked/);
+  });
+
+  it("answers the first things people type", async () => {
+    const d = new DemoDriver();
+    await d.send("what's your phone number?");
+    expect(d.lastText).toContain("(555) 010-0100");
+    await d.send("I need a plumber");
+    expect(d.lastText).toMatch(/What's going on\?/);
+    await d.send("how much for a new water heater?");
+    expect(d.tool("get_estimate")?.input).toMatchObject({ service_code: "WH-REPLACE" });
+    await d.send("yes");
+    expect(d.card("slots")?.serviceCode).toBe("WH-REPLACE");
+  });
+
+  it("asks again when the callback 'number' has no digits, and records the real one", async () => {
+    const d = new DemoDriver();
+    await d.send("can I talk to a person");
+    await d.send("my number is banana");
+    expect(d.lastText).toMatch(/didn't catch a phone number/);
+  });
+
+  it("records the callback number and the owner's note in the inbox summary", async () => {
+    const d = new DemoDriver();
+    await d.send("can I talk to a person");
+    await d.send("555-010-0199");
+    expect(d.state.lead.summary).toContain("555-010-0199");
+    const t = new DemoDriver();
+    await t.send("Do you service 97406?");
+    t.staffSays("I can do 8 AM tomorrow.");
+    await t.event({ kind: "handback" });
+    expect(t.state.lead.summary).toContain("Sam took over the chat");
+    expect(t.state.lead.summary).toContain("8 AM tomorrow");
+  });
+
+  it("mentions round-the-clock dispatch when an urgent problem cannot be seen today", async () => {
+    const evening = new DemoDriver({ today: "2026-11-17", nowMinutes: 20 * 60 + 40, tz: "UTC" });
+    await evening.sendSample("My water heater is leaking", "water-heater");
+    expect(evening.card("slots")!.slots.every((s) => s.date !== "2026-11-17")).toBe(true);
+    expect(evening.lastText).toMatch(/after-hours dispatcher/);
+    const morning = new DemoDriver();
+    await morning.sendSample("My water heater is leaking", "water-heater");
+    expect(morning.lastText).not.toMatch(/after-hours dispatcher/);
   });
 });
