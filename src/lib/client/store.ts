@@ -251,8 +251,27 @@ export const useDemo = create<DemoStore>()(
         }));
       };
 
+      // Reset demo bumps the epoch: a turn that was streaming for the old sandbox
+      // is aborted and anything it still delivers is ignored.
+      let epoch = 0;
+      let inFlight: AbortController | null = null;
+
+      /** Resolves once no turn is streaming (or the sandbox was reset). */
+      const whenIdle = (forEpoch: number) =>
+        new Promise<boolean>((resolve) => {
+          if (!get().sending) return resolve(epoch === forEpoch);
+          const unsubscribe = useDemo.subscribe((state) => {
+            if (state.sending) return;
+            unsubscribe();
+            resolve(epoch === forEpoch);
+          });
+        });
+
       const runTurn = async () => {
         const clock = now();
+        const myEpoch = epoch;
+        const controller = new AbortController();
+        inFlight = controller;
         const assistantId = uid("a");
         const startedAt = performance.now();
         const before = get();
@@ -273,6 +292,7 @@ export const useDemo = create<DemoStore>()(
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ messages: wire, state: { jobs: before.jobs, lead: before.lead }, clock }),
+            signal: controller.signal,
           });
           const type = response.headers.get("content-type") ?? "";
           if (!type.includes("ndjson")) {
@@ -286,6 +306,7 @@ export const useDemo = create<DemoStore>()(
             failWith(reason);
           } else {
             for await (const event of readNdjson(response)) {
+              if (epoch !== myEpoch) return;
               if (firstMs === null && (event.type === "text" || event.type === "tool_call" || event.type === "notice")) {
                 firstMs = Math.round(performance.now() - startedAt);
               }
@@ -298,12 +319,29 @@ export const useDemo = create<DemoStore>()(
             if (turn.stopReason === null) failWith("The connection dropped before Penny finished. Please try again.");
           }
         } catch {
+          if (epoch !== myEpoch) return;
           failWith("Couldn't reach the server. Check your connection and try again.");
+        }
+        if (epoch !== myEpoch) return;
+        if (inFlight === controller) inFlight = null;
+
+        // If the booking could not be created (for example the ZIP is outside the
+        // service area), give the details form back so it can be corrected.
+        const bookingFailed = turn.parts.some((p) => p.type === "tool" && p.name === "create_booking" && p.isError);
+        const unlock: Record<string, CardUiState> = {};
+        if (bookingFailed) {
+          for (const message of get().messages) {
+            if (message.role !== "assistant") continue;
+            for (const part of message.turn.parts) {
+              if (part.type === "tool" && part.card?.kind === "details") unlock[part.id] = { submitted: false };
+            }
+          }
         }
 
         updateAssistant(assistantId, turn, { streaming: false, responseMs: firstMs });
         set((s) => ({
           sending: false,
+          cardState: bookingFailed ? { ...s.cardState, ...unlock } : s.cardState,
           responseMs: firstMs !== null && turn.stopReason !== "rejected" ? [...s.responseMs, firstMs].slice(-40) : s.responseMs,
         }));
       };
@@ -321,15 +359,23 @@ export const useDemo = create<DemoStore>()(
             const s = get();
             // A sandbox seeded on an earlier day would show a stale calendar.
             if (s.seedDay !== clock.today) set({ ...freshData(clock, { view: s.view, xray: s.xray }) });
-            // A turn that was mid-stream when the tab closed cannot resume.
+            // A reply that was mid-stream when the tab closed is discarded...
             set((cur) => ({
               ready: true,
-              messages: cur.messages.map((m) => (m.role === "assistant" && m.streaming ? { ...m, streaming: false } : m)),
+              messages: cur.messages.filter((m) => !(m.role === "assistant" && m.streaming)),
             }));
+            // ...and if the customer's last message or tap never got an answer,
+            // the turn is run again. Tools are idempotent, so this is safe.
+            const after = get();
+            const last = after.messages[after.messages.length - 1];
+            if (last && (last.role === "user" || last.role === "event") && after.lead.status !== "human") void runTurn();
           });
         },
 
         reset: () => {
+          epoch += 1;
+          inFlight?.abort();
+          inFlight = null;
           const s = get();
           set({ ...freshData(now(), { view: s.view, xray: s.xray }), ...initialRuntime, ready: true, mode: s.mode, model: s.model });
         },
@@ -357,10 +403,42 @@ export const useDemo = create<DemoStore>()(
         sendEvent: async (event) => {
           if (get().sending) return;
           const clock = now();
+          const startEpoch = epoch;
           set((cur) => ({
             messages: [...cur.messages, { id: uid("e"), role: "event", event, sentAt: fmtStamp(clock), atMin: clock.nowMinutes }],
           }));
           await runTurn();
+
+          const failed = () => {
+            const messages = get().messages;
+            const last = messages[messages.length - 1];
+            if (epoch !== startEpoch || !last || last.role !== "assistant") return false;
+            const stop = last.turn.stopReason;
+            return stop === null || stop === "rejected" || stop === "error";
+          };
+          if (!failed()) return;
+
+          if (event.kind === "payment_confirmed") {
+            // The money part already succeeded; keep trying to deliver the
+            // confirmation rather than leaving a paid booking unconfirmed.
+            for (let attempt = 0; attempt < 2 && failed(); attempt++) {
+              await new Promise((resolve) => window.setTimeout(resolve, 1500));
+              if (epoch !== startEpoch) return;
+              set((cur) => ({ messages: cur.messages.slice(0, -1) }));
+              await runTurn();
+            }
+            return;
+          }
+          // A tap that never got an answer must not leave its card locked.
+          set((cur) => {
+            const cardState = { ...cur.cardState };
+            for (const [id, state] of Object.entries(cardState)) {
+              if (event.kind === "slot_selected" && state.chosenSlotId === event.slotId) cardState[id] = { ...state, chosenSlotId: undefined };
+              if (event.kind === "details_submitted" && state.submitted) cardState[id] = { ...state, submitted: false };
+              if (event.kind === "callback_requested" && state.callbackSent) cardState[id] = { ...state, callbackSent: false };
+            }
+            return { cardState };
+          });
         },
 
         setCardState: (toolId, changes) =>
@@ -382,7 +460,12 @@ export const useDemo = create<DemoStore>()(
               flights: from ? [...cur.flights, { id: uid("f"), jobCode: bookingCode, from }] : cur.flights,
               justLanded: from ? cur.justLanded : [...cur.justLanded, bookingCode],
             }));
-            void get().sendEvent({ kind: "payment_confirmed", bookingCode });
+            // The checkout card can be paid while Penny is still typing the line
+            // under it; the confirmation turn waits for that reply to finish.
+            const forEpoch = epoch;
+            void whenIdle(forEpoch).then((same) => {
+              if (same) void get().sendEvent({ kind: "payment_confirmed", bookingCode });
+            });
             return { ok: true };
           } catch {
             return { ok: false, reason: "Couldn't reach the server. Check your connection and try again." };

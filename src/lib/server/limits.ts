@@ -19,9 +19,18 @@ export const CAPS = {
   maxMessageChars: envInt("PENNY_MAX_MESSAGE_CHARS", 1500),
   maxImagesPerConversation: envInt("PENNY_MAX_IMAGES", 3),
   /** Decoded bytes of one uploaded image (it is resized client-side first). */
-  maxImageBytes: 1_500_000,
-  /** Whole JSON request body. */
-  maxBodyBytes: 6_000_000,
+  maxImageBytes: 900_000,
+  /**
+   * Whole JSON request body. Kept under Vercel's 4.5 MB function payload
+   * limit: three photos at the per-image cap plus the transcript still fit.
+   */
+  maxBodyBytes: 4_300_000,
+  /**
+   * Characters of text and tool JSON across the whole transcript (photos
+   * excluded). The history is client-supplied, so without this a crafted
+   * request could push an arbitrarily large prompt to the model.
+   */
+  maxTranscriptChars: envInt("PENNY_MAX_TRANSCRIPT_CHARS", 60_000),
   maxTokensPerStep: envInt("PENNY_MAX_TOKENS", 4096),
   /** Model round-trips inside one turn. */
   maxToolSteps: 6,
@@ -122,10 +131,39 @@ export async function takeLiveTurn(now: number = Date.now()): Promise<boolean> {
   return used <= RATE.globalLiveTurnsPerDay;
 }
 
+/**
+ * The caller's address for rate limiting. Vercel sets x-vercel-forwarded-for
+ * and x-real-ip itself and overwrites what the client sent; a plain
+ * x-forwarded-for is only a last resort because a client can forge it on
+ * hosts that do not.
+ */
 export function clientIp(headers: Headers): string {
-  const forwarded = headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim().slice(0, 64) || "unknown";
-  return headers.get("x-real-ip")?.slice(0, 64) ?? "unknown";
+  const pick = (value: string | null) => value?.split(",")[0].trim().slice(0, 64) || null;
+  return pick(headers.get("x-vercel-forwarded-for")) ?? pick(headers.get("x-real-ip")) ?? pick(headers.get("x-forwarded-for")) ?? "unknown";
+}
+
+/**
+ * Reads a request body but gives up once it passes `maxBytes`, so a request
+ * with no (or a false) content-length cannot be buffered without limit.
+ */
+export async function readBodyCapped(request: Request, maxBytes: number): Promise<string | null> {
+  if (Number(request.headers.get("content-length") ?? 0) > maxBytes) return null;
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let received = 0;
+  let text = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    received += value.byteLength;
+    if (received > maxBytes) {
+      await reader.cancel();
+      return null;
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  return text + decoder.decode();
 }
 
 /** Test hook. */

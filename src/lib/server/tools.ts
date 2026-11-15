@@ -569,6 +569,22 @@ const sendConfirmation = define({
   },
 });
 
+/**
+ * A booking code is enough to see and move a visit, the way a confirmation
+ * link would be, but not to read the customer's surname or street address:
+ * codes are sequential, so those are only shown to the conversation that made
+ * the booking.
+ */
+function isOwnBooking(job: Job, ctx: ToolContext): boolean {
+  return job.conversationId === ctx.state.lead.id;
+}
+
+function publicBookingView(job: Job, ctx: ToolContext): BookingView {
+  const view = bookingView(job);
+  if (isOwnBooking(job, ctx)) return view;
+  return { ...view, customerName: job.customerName.split(" ")[0], address: "Address on file" };
+}
+
 const lookupBooking = define({
   name: "lookup_booking",
   description: "Look up an existing booking by its code (for example CPL-4821). Call this before rescheduling or cancelling.",
@@ -584,10 +600,10 @@ const lookupBooking = define({
         service_code: job.serviceCode,
         when: slotLabel(job, ctx.clock),
         technician: techById(job.techId)?.name,
-        customer: job.customerName,
-        address: job.address,
+        customer_first_name: job.customerName.split(" ")[0],
+        note: "The surname and street address are not shown for a code-only lookup.",
       },
-      { kind: "booking", booking: bookingView(job) },
+      { kind: "booking", booking: publicBookingView(job, ctx) },
     );
   },
 });
@@ -613,11 +629,18 @@ const rescheduleBooking = define({
     const body = confirmationSms(moved, ctx.clock, lang, "rescheduled");
     return ok(
       { booking_code: job.code, moved_to: slotLabel(check.slot, ctx.clock), technician: check.slot.techName, fee: "No charge to reschedule." },
-      { kind: "confirmation", variant: "rescheduled", booking: bookingView(moved), smsPreview: body, smsTo: job.phone, emailTo: job.email },
+      {
+        kind: "confirmation",
+        variant: "rescheduled",
+        booking: publicBookingView(moved, ctx),
+        smsPreview: body,
+        smsTo: isOwnBooking(job, ctx) ? job.phone : "the number on file",
+        emailTo: isOwnBooking(job, ctx) ? job.email : "",
+      },
       [
         { op: "job.update", code: job.code, changes: { techId: moved.techId, date: moved.date, startMin: moved.startMin } },
         { op: "message.log", message: smsMessage(`out-${job.code}-sms-${moved.date}-${moved.startMin}`, job.customerName, body, ctx.clock, job.code) },
-        { op: "lead.update", changes: { customerName: job.customerName, jobCode: job.code, status: "booked", intent: "reschedule" } },
+        { op: "lead.update", changes: { customerName: job.customerName.split(" ")[0], jobCode: job.code, status: "booked", intent: "reschedule" } },
       ],
     );
   },
@@ -650,11 +673,11 @@ const cancelBooking = define({
     const cancelled: Job = { ...job, status: "cancelled" };
     return ok(
       { booking_code: job.code, status: "cancelled", refund: refundNote },
-      { kind: "cancelled", booking: bookingView(cancelled), refundNote },
+      { kind: "cancelled", booking: publicBookingView(cancelled, ctx), refundNote },
       [
         { op: "job.update", code: job.code, changes: { status: "cancelled" } },
         { op: "message.log", message: smsMessage(`out-${job.code}-sms-cancel`, job.customerName, body, ctx.clock, job.code) },
-        { op: "lead.update", changes: { customerName: job.customerName, jobCode: job.code, status: "resolved", intent: "cancel" } },
+        { op: "lead.update", changes: { customerName: job.customerName.split(" ")[0], jobCode: job.code, status: "resolved", intent: "cancel" } },
       ],
     );
   },

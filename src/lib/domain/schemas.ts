@@ -98,8 +98,8 @@ const wireImageSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("upload"),
     mediaType: z.enum(["image/jpeg", "image/png", "image/webp"]),
-    // ~2 MB of base64; the decoded size is checked again on the server.
-    dataBase64: z.string().max(2_100_000),
+    // ~900 KB decoded; the exact size is checked again on the server.
+    dataBase64: z.string().max(1_250_000),
   }),
   z.object({ kind: z.literal("gone") }),
 ]);

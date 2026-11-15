@@ -285,6 +285,14 @@ function DetailsCard({ card, toolId, lang }: CardProps<"details">) {
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (locked || sending) return;
+    if (!details.name.trim() || details.address.trim().length < 3) {
+      setError(lang === "es" ? "Indique su nombre y la dirección del servicio." : "Please enter your name and the service address.");
+      return;
+    }
+    if (details.phone.replace(/\D/g, "").length < 7) {
+      setError(lang === "es" ? "Indique un teléfono válido." : "Please enter a phone number we can reach you on.");
+      return;
+    }
     if (!/^\d{5}$/.test(details.zip.trim())) {
       setError(lang === "es" ? "El código postal debe tener 5 dígitos." : "ZIP code must be 5 digits.");
       return;

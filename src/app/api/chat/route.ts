@@ -4,7 +4,7 @@ import { techById } from "@/lib/domain/technicians";
 import { diffDays, localDayStr } from "@/lib/domain/time";
 import type { StreamEvent } from "@/lib/domain/types";
 import { resolveMode, runTurn } from "@/lib/server/engine";
-import { CAPS, checkRate, clientIp } from "@/lib/server/limits";
+import { CAPS, checkRate, clientIp, readBodyCapped } from "@/lib/server/limits";
 
 export const maxDuration = 60;
 
@@ -31,16 +31,26 @@ function noticeStream(status: number, event: Extract<StreamEvent, { type: "notic
  * never leave the server.
  */
 export async function POST(request: Request): Promise<Response> {
-  const declared = Number(request.headers.get("content-length") ?? 0);
-  if (declared > CAPS.maxBodyBytes) return json(413, "Request too large.");
+  // Cheapest checks first: the limiter runs before any body is read or parsed.
+  const rate = await checkRate(clientIp(request.headers));
+  if (!rate.ok) {
+    return noticeStream(429, {
+      type: "notice",
+      code: "rate_limited",
+      message:
+        rate.scope === "day"
+          ? "Demo limit reached: you've sent a lot of messages today. Please come back tomorrow."
+          : "Demo limit reached: you're sending messages very quickly. Give it a minute and try again.",
+    });
+  }
 
-  let raw: string;
+  let raw: string | null;
   try {
-    raw = await request.text();
+    raw = await readBodyCapped(request, CAPS.maxBodyBytes);
   } catch {
     return json(400, "Could not read the request.");
   }
-  if (raw.length > CAPS.maxBodyBytes) return json(413, "Request too large.");
+  if (raw === null) return json(413, "That request is too large for this demo. Try a smaller photo, or use “Reset demo”.");
 
   let body: unknown;
   try {
@@ -58,18 +68,6 @@ export async function POST(request: Request): Promise<Response> {
   }
   if (input.state.jobs.some((job) => !techById(job.techId))) return json(400, "Unknown technician in state.");
   input.state.lead = { ...input.state.lead, id: LIVE_LEAD_ID, live: true };
-
-  const rate = await checkRate(clientIp(request.headers));
-  if (!rate.ok) {
-    return noticeStream(429, {
-      type: "notice",
-      code: "rate_limited",
-      message:
-        rate.scope === "day"
-          ? "Demo limit reached: you've sent a lot of messages today. Please come back tomorrow."
-          : "Demo limit reached: you're sending messages very quickly. Give it a minute and try again.",
-    });
-  }
 
   if (input.state.lead.status === "human") {
     return noticeStream(200, { type: "notice", code: "error", message: "A Copperline team member has taken over this chat." });

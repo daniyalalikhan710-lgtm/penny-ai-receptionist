@@ -5,6 +5,8 @@ import type { UploadData } from "@/lib/domain/chat";
 const MAX_EDGE = 1568;
 const THUMB_EDGE = 240;
 const MAX_RAW_BYTES = 20 * 1024 * 1024;
+/** Just under the server's per-image cap (see CAPS.maxImageBytes). */
+const MAX_UPLOAD_BYTES = 850_000;
 
 export interface PreparedUpload {
   data: UploadData;
@@ -38,9 +40,18 @@ export async function prepareUpload(file: File): Promise<PreparedUpload> {
     throw new Error("That image couldn't be opened. Please try a JPEG or PNG.");
   }
   try {
-    const full = draw(bitmap, MAX_EDGE).toDataURL("image/jpeg", 0.82);
+    // Step the quality (then the size) down until the photo fits the server's
+    // per-image cap; a normal phone photo fits on the first try.
+    const attempts: Array<[number, number]> = [[MAX_EDGE, 0.82], [MAX_EDGE, 0.68], [1280, 0.68], [1024, 0.6]];
+    let base64 = "";
+    for (const [edge, quality] of attempts) {
+      const url = draw(bitmap, edge).toDataURL("image/jpeg", quality);
+      base64 = url.slice(url.indexOf(",") + 1);
+      if (base64.length * 0.75 <= MAX_UPLOAD_BYTES) break;
+    }
+    if (base64.length * 0.75 > MAX_UPLOAD_BYTES) throw new Error("That photo is too detailed to send here. Please try a different one.");
     const thumb = draw(bitmap, THUMB_EDGE).toDataURL("image/jpeg", 0.7);
-    return { data: { mediaType: "image/jpeg", dataBase64: full.slice(full.indexOf(",") + 1) }, thumb };
+    return { data: { mediaType: "image/jpeg", dataBase64: base64 }, thumb };
   } finally {
     bitmap.close();
   }

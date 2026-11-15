@@ -1,7 +1,7 @@
 {
   "mode": "replay",
   "model": "replay",
-  "ranAt": "2026-11-15T15:36:34.095Z",
+  "ranAt": "2026-11-15T15:41:42.377Z",
   "cases": {
     "passed": 14,
     "total": 14,
@@ -19,7 +19,7 @@
       "checks": "17/17",
       "costUsd": 0,
       "turns": 4,
-      "ms": 5,
+      "ms": 6,
       "failed": []
     },
     {
@@ -37,7 +37,7 @@
       "checks": "3/3",
       "costUsd": 0,
       "turns": 1,
-      "ms": 1,
+      "ms": 2,
       "failed": []
     },
     {
@@ -136,7 +136,7 @@
       "checks": "3/3",
       "costUsd": 0,
       "turns": 0,
-      "ms": 23,
+      "ms": 22,
       "failed": []
     },
     {
@@ -145,7 +145,7 @@
       "checks": "4/4",
       "costUsd": 0,
       "turns": 2,
-      "ms": 1,
+      "ms": 0,
       "failed": []
     },
     {

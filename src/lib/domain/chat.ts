@@ -156,7 +156,15 @@ export interface UploadData {
 /** Converts the browser transcript to what /api/chat expects. */
 export function toWire(messages: ChatMessage[], uploads: Record<string, UploadData>): WireMessage[] {
   const wire: WireMessage[] = [];
+  // A message the server refused (too long, unreadable photo, rate limit) is
+  // not part of the conversation: it must not ride along on later turns.
+  const refused = new Set<string>();
+  messages.forEach((message, i) => {
+    const next = messages[i + 1];
+    if ((message.role === "user" || message.role === "event") && next?.role === "assistant" && next.turn.stopReason === "rejected") refused.add(message.id);
+  });
   for (const message of messages) {
+    if (refused.has(message.id)) continue;
     switch (message.role) {
       case "user": {
         let image: WireImage | null = null;

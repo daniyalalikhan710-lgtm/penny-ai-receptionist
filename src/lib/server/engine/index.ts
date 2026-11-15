@@ -38,6 +38,25 @@ function uploadProblem(message: Extract<WireMessage, { role: "user" }>): string 
   return null;
 }
 
+function jsonLength(value: unknown): number {
+  try {
+    return JSON.stringify(value)?.length ?? 0;
+  } catch {
+    return Number.MAX_SAFE_INTEGER;
+  }
+}
+
+/** Size of everything in the transcript that becomes prompt text. */
+export function transcriptChars(messages: WireMessage[]): number {
+  let total = 0;
+  for (const message of messages) {
+    if (message.role === "user" || message.role === "staff") total += message.text.length;
+    else if (message.role === "assistant") total += message.text.length + jsonLength(message.tools);
+    else total += jsonLength(message.event);
+  }
+  return total;
+}
+
 /**
  * Server-side caps, checked before any engine runs. Each failure becomes a
  * friendly "demo limit" notice in the chat rather than an error.
@@ -53,6 +72,17 @@ export function checkCaps(input: TurnInput): Rejection | null {
     return {
       code: "message_cap",
       message: `Demo limit reached: this conversation has hit ${CAPS.maxUserTurns} messages. Use “Reset demo” to start a fresh one.`,
+    };
+  }
+  // Every customer message is held to the cap, not just the newest one: the
+  // history comes from the client and all of it reaches the model.
+  if (messages.some((m) => m !== last && m.role === "user" && m.text.length > CAPS.maxMessageChars)) {
+    return { code: "too_long", message: "An earlier message in this conversation is too long for this demo. Use “Reset demo” to start again." };
+  }
+  if (transcriptChars(messages) > CAPS.maxTranscriptChars) {
+    return {
+      code: "message_cap",
+      message: "Demo limit reached: this conversation has grown too long. Use “Reset demo” to start a fresh one.",
     };
   }
   if (last.role === "user") {

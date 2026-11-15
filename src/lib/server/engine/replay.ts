@@ -161,10 +161,11 @@ function serviceFromText(raw: string): ServiceHit | null {
   if (/disposal|triturador/.test(text)) return { code: "DISPOSAL" };
   if (/sump/.test(text)) return { code: "SUMP" };
   if (/faucet|tap\b|grifo|llave/.test(text)) return { code: "FAUCET" };
-  if (/drain|clog|backed up|backing up|won't drain|wont drain|sink|shower|tub|desague|tapad|fregadero/.test(text)) {
-    return { code: "DRAIN-CLEAR" };
-  }
-  if (/leak|drip|pipe|burst|corrod|fuga|gotea|tuberia/.test(text)) return { code: "LEAK-REPAIR" };
+  const leaking = /leak|drip|burst|corrod|fuga|gotea/.test(text);
+  const blocked = /drain|clog|backed up|backing up|won't drain|wont drain|slow|standing water|desague|tapad/.test(text);
+  if (leaking && !blocked) return { code: "LEAK-REPAIR" };
+  if (blocked || /sink|shower|tub|fregadero/.test(text)) return { code: "DRAIN-CLEAR" };
+  if (/pipe|tuberia/.test(text)) return { code: "LEAK-REPAIR" };
   return null;
 }
 
@@ -855,7 +856,8 @@ function rescheduleScript(code: string): Script {
         await r.say(r.t(`I couldn't find a booking with the code ${code}. Could you check it? It starts with CPL.`, `No encontré una reserva con el código ${code}. ¿Puede revisarlo? Empieza con CPL.`));
         return;
       }
-      const out = found.output as { service?: string; service_code?: string; when?: string; technician?: string; customer?: string; status?: string };
+      const raw = found.output as { service?: string; service_code?: string; when?: string; technician?: string; customer_first_name?: string; status?: string };
+      const out = { ...raw, customer: raw.customer_first_name };
       if (out.status === "cancelled") {
         await r.say(r.t("That booking was cancelled, so there's nothing to move. Would you like to book a new visit?", "Esa reserva fue cancelada. ¿Quiere agendar una visita nueva?"));
         return;
@@ -1087,7 +1089,7 @@ export function routeReplay(input: TurnInput): { script: Script; lang: Lang } {
     return pick(offScript); // An uploaded photo needs the live model.
   }
 
-  if (/ignore (all |your |any |the |previous |prior )*(instructions|rules|prompt)|system prompt|reveal (your )?(prompt|instructions)|jailbreak|developer mode|\d{2,3} ?% (off|discount)|free (repair|service)|pretend (you|to be)|you are now/.test(text)) {
+  if (/ignore (all |your |any |the |previous |prior )*(instructions|rules|prompt)|system prompt|reveal (your )?(prompt|instructions)|jailbreak|developer mode|(give|get) (me|us) (a |an )?\d{2,3} ?%|(i want|i need|apply|take|knock) (a |an |me )?\d{2,3} ?%|\d{2,3} ?% (off|discount) (or|now|please|right now)|for free\b|pretend (you|to be)|you are now/.test(text)) {
     return pick(injectionScript);
   }
 
