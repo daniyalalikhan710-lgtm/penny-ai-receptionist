@@ -541,7 +541,7 @@ function eventScript(event: UiEvent, messages: WireMessage[]): Script {
           );
           r.cite("care-club", "Members never pay the diagnostic fee.");
           await r.call("update_lead", {
-            summary_en: `${r.lead.summary ? `${r.lead.summary} ` : ""}Booked ${out.booking_code} (${job?.serviceName ?? "service visit"}) for ${out.when} with ${out.technician}; diagnostic fee paid.`.slice(0, 380),
+            summary_en: `${r.lead.summary ? `${r.lead.summary} ` : ""}Booked ${out.booking_code} (${job?.serviceName ?? "service visit"}) for ${inlineLabel(out.when ?? "")} with ${out.technician}; diagnostic fee paid.`.slice(0, 380),
             intent: "booking",
             urgency: r.lead.urgency,
             customer_language: r.lang,
