@@ -45,6 +45,9 @@ export interface LiveConfig {
 
 const EFFORTS: Effort[] = ["low", "medium", "high", "xhigh", "max"];
 
+/** Tools whose result the customer never waits on. */
+const BACKGROUND_TOOLS = new Set(["update_lead"]);
+
 export function liveConfigFromEnv(client: MessagesClient): LiveConfig {
   const effort = (process.env.ANTHROPIC_EFFORT ?? "low") as Effort;
   return {
@@ -228,6 +231,12 @@ export function createLiveEngine(config: LiveConfig): Engine {
         });
         // All results go back in one user message so parallel calls keep working.
         messages.push({ role: "user", content: results });
+
+        // A reply that only also filed a background note is already complete:
+        // asking the model to speak again would cost a round trip and tempt it
+        // to repeat itself. The note's result is replayed in the next turn's history.
+        const wroteReply = message.content.some((block) => block.type === "text" && block.text.trim().length > 0);
+        if (wroteReply && toolUses.every((use) => BACKGROUND_TOOLS.has(use.name))) return { stopReason: "end_turn" };
       }
 
       emit({ type: "notice", code: "error", message: "That took more steps than this demo allows. Please try again." });

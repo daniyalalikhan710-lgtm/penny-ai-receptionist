@@ -342,3 +342,34 @@ describe("runTurn mode selection", () => {
     expect(events[events.length - 1].type).toBe("done");
   });
 });
+
+describe("background tools", () => {
+  it("ends the turn when the reply was written alongside only an inbox update", async () => {
+    const step: StubStep = {
+      stop_reason: "tool_use",
+      content: [
+        { type: "text", text: "Every repair carries a 2-year warranty.", citations: null },
+        { type: "tool_use", id: "toolu_note", name: "update_lead", input: { summary_en: "Asked about warranty.", intent: "question", urgency: "routine", customer_language: "en", customer_name: null } },
+      ],
+      events: [textDelta(0, "Every repair carries a 2-year warranty."), blockStop(0)],
+    };
+    const { client, requests } = stubClient([step, answerStep]);
+    const { turn, stopReason } = await run(config(client), input([user("What's your warranty?")]));
+    expect(stopReason).toBe("end_turn");
+    expect(requests).toHaveLength(1);
+    expect(turnTools(turn).map((t) => t.name)).toEqual(["update_lead"]);
+    expect(turnText(turn)).toBe("Every repair carries a 2-year warranty.");
+  });
+
+  it("keeps going when the inbox update came without a reply, or with a tool whose result matters", async () => {
+    const noteOnly: StubStep = { stop_reason: "tool_use", content: [toolStep.content[1]] };
+    const first = stubClient([noteOnly, answerStep]);
+    await run(config(first.client), input([user("hi")]));
+    expect(first.requests).toHaveLength(2);
+
+    const withEstimate: StubStep = { stop_reason: "tool_use", content: [{ type: "text", text: "Let me check.", citations: null }, ...toolStep.content.slice(1)] };
+    const second = stubClient([withEstimate, answerStep]);
+    await run(config(second.client), input([user("price?")]));
+    expect(second.requests).toHaveLength(2);
+  });
+});

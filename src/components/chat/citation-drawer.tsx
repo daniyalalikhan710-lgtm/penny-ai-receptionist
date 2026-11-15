@@ -91,6 +91,13 @@ export function CitationDrawer() {
   }, [doc, citation]);
 
   const lines = doc ? toLines(doc.text) : [];
+  // The API cites whole chunks, which can begin with the section heading above
+  // the sentence. Highlight from the first line of actual prose instead.
+  let from = citation?.start ?? 0;
+  if (citation) {
+    const prose = lines.find((line) => line.start + line.text.length > citation.start && line.start < citation.end && (line.kind === "p" || line.kind === "bullet"));
+    if (prose) from = Math.max(citation.start, prose.start);
+  }
   let firstMarkAssigned = false;
 
   return (
@@ -132,10 +139,10 @@ export function CitationDrawer() {
           {citation &&
             lines.map((line, i) => {
               const lineEnd = line.start + line.text.length;
-              const overlaps = citation.start < lineEnd && citation.end > line.start;
+              const overlaps = from < lineEnd && citation.end > line.start;
               const ref = overlaps && !firstMarkAssigned ? markRef : { current: null };
               if (overlaps) firstMarkAssigned = true;
-              const content = <LineText line={line} start={citation.start} end={citation.end} markRef={ref} />;
+              const content = <LineText line={line} start={from} end={citation.end} markRef={ref} />;
               if (line.kind === "blank") return <div key={i} className="h-2" />;
               if (line.kind === "h1") return null; // The sheet title already shows it.
               if (line.kind === "h2")
