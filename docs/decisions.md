@@ -22,3 +22,11 @@ One line each, with the reason. Made while building unattended (brief §0).
 - **Sample photos show the equipment, not active faults.** Unsplash had no free photo of e.g. a visibly leaking tank. Penny's scripted diagnoses describe only what is actually visible and state lower confidence where the photo shows nothing wrong.
 - **Demo ZIP codes 97401–97412 are paired with fictional towns.** Labelled as demo data in the UI.
 - **Hire link hidden.** `NEXT_PUBLIC_HIRE_URL` is blank in `.env.local`, so the banner shows "Built by …" without a link (brief §4).
+- **A booking code alone can look up, move or cancel a visit, but does not reveal a surname or street address.** Codes are sequential, so a code-only lookup shows the first name and "Address on file" unless the booking was made in the same conversation. Found in code review.
+- **The whole client-supplied transcript is capped, not just the newest message** (`PENNY_MAX_TRANSCRIPT_CHARS`, default 60,000 characters). The history comes from the browser and all of it reaches the model, so an uncapped history would be a way to run up the API bill. Found in code review.
+- **Body cap 4.3 MB, image cap 900 KB.** Three photos at the cap plus the transcript stay under Vercel's 4.5 MB function payload limit; the browser steps JPEG quality down until a photo fits.
+- **Reset demo aborts the turn in flight** and anything it still delivers is ignored, so a stale reply cannot write into the fresh sandbox.
+- **A reload mid-turn re-runs the unanswered message.** Tools are idempotent (a held slot is reused, confirmations are de-duplicated by id), so re-running is safe.
+- **View switcher and day picker are toggle buttons, not ARIA tabs.** They have no tab panels and no arrow-key model, so `aria-pressed` describes them honestly.
+- **The `security-review` skill could not run before the first push** (it diffs against `origin/HEAD`, which does not exist until the repo has a remote). An independent reviewer audited the same checklist instead; its findings are recorded with the fixes in the commit history.
+- **No guided tour.** The first suggested prompt is marked "Start here" and each pane is labelled; a modal tour would sit between the visitor and the one thing they should click. Listed under Roadmap.
