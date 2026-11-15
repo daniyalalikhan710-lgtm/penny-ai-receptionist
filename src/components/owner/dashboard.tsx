@@ -132,11 +132,11 @@ function KpiStrip({ today }: { today: string }) {
 
   return (
     <div className="grid grid-cols-2 gap-2 @lg:grid-cols-3 @3xl:grid-cols-5">
-      <Kpi icon={<CalendarCheck className="size-3.5" />} label="Booked by Penny today" value={pennyJobs.length} format={(n) => String(Math.round(n))} hint="No staff time used" testId="kpi-booked" accent />
-      <Kpi icon={<CircleDollarSign className="size-3.5" />} label="Revenue booked today" value={Math.round(revenue)} format={(n) => fmtMoney(Math.round(n))} hint="Estimate midpoints" testId="kpi-revenue" accent />
-      <Kpi icon={<MessageSquareText className="size-3.5" />} label="Conversations today" value={BASELINE.conversations + (started ? 1 : 0)} format={(n) => String(Math.round(n))} hint="Chat and SMS, today" testId="kpi-conversations" />
-      <Kpi icon={<Timer className="size-3.5" />} label="Median response time" value={Math.round(medianMs)} format={(n) => `${(n / 1000).toFixed(1)}s`} hint="To Penny's first reply" testId="kpi-response" />
-      <Kpi icon={<UsersRound className="size-3.5" />} label="Escalated to staff" value={escalations} format={(n) => String(Math.round(n))} hint="Waiting on the team" testId="kpi-escalations" />
+      <Kpi icon={<CalendarCheck className="size-3.5" />} label="Booked by Penny" value={pennyJobs.length} format={(n) => String(Math.round(n))} hint="Today, no staff time" testId="kpi-booked" accent />
+      <Kpi icon={<CircleDollarSign className="size-3.5" />} label="Revenue booked" value={Math.round(revenue)} format={(n) => fmtMoney(Math.round(n))} hint="Today, est. midpoints" testId="kpi-revenue" accent />
+      <Kpi icon={<MessageSquareText className="size-3.5" />} label="Conversations" value={BASELINE.conversations + (started ? 1 : 0)} format={(n) => String(Math.round(n))} hint="Chat and SMS, today" testId="kpi-conversations" />
+      <Kpi icon={<Timer className="size-3.5" />} label="Median response" value={Math.round(medianMs)} format={(n) => `${(n / 1000).toFixed(1)}s`} hint="To Penny's first reply" testId="kpi-response" />
+      <Kpi icon={<UsersRound className="size-3.5" />} label="Escalated" value={escalations} format={(n) => String(Math.round(n))} hint="Waiting on the team" testId="kpi-escalations" />
     </div>
   );
 }

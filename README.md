@@ -100,11 +100,13 @@ Key files:
 | Check | Result |
 |---|---|
 | `pnpm typecheck`, `pnpm lint`, `pnpm build` | Clean |
-| `pnpm test` (Vitest) | 77 tests: scheduling, pricing, documents, tools, replay scenarios, live engine against a stubbed SDK client, caps, rate limits, API routes |
-| `pnpm e2e` (Playwright) | 6 tests: golden path, emergency, citations, takeover, Spanish and reschedule, mobile |
+| `pnpm test` (Vitest) | 93 tests: scheduling, pricing, documents, tools, replay scenarios, live engine against a stubbed SDK client, caps, rate limits, API routes, security regressions |
+| `pnpm e2e` (Playwright) | 8 tests: golden path, emergency, citations, takeover, Spanish and reschedule, form recovery and pay-while-typing, mobile, reduced motion |
 | `pnpm eval:replay` | 14 of 14 cases, 65 of 65 checks (2 cases need the live model and are skipped) |
 | `pnpm eval` (live) | Not run yet: no API key. Exits cleanly with "no API key, skipped" |
 | `pnpm a11y` (axe-core, WCAG 2.1 A/AA) | No violations across 13 screens and states |
+| Lighthouse (production build, local) | 100 performance, 100 accessibility, 100 best practices, 100 SEO, on both desktop and mobile presets |
+| Reviews before shipping | Code review, independent security review ([findings and fixes](docs/security-review.md)), [accessibility audit](docs/accessibility-audit.md), and a fresh-eyes "try to break it" pass as a first-time client |
 
 The eval suite scripts 16 conversations and asserts on which tools were called with which arguments and on the resulting state, not on wording: golden path, gas emergency, out-of-area ZIP, non-repair photo, Spanish, reschedule, warranty citation, price accuracy, prompt injection in text and inside an image, "are you human?", off-topic, an over-long message, rapid-fire spam, cancellation needing confirmation, and takeover hand-back.
 
@@ -140,7 +142,7 @@ All are documented in [`.env.example`](.env.example).
 | `ANTHROPIC_EFFORT` | `low` | Reasoning effort. Keep it constant; changing it invalidates the cache. |
 | `PENNY_MODE` | blank | Set to `replay` to force the scripted engine. |
 | `NEXT_PUBLIC_AUTHOR_NAME`, `NEXT_PUBLIC_HIRE_URL` | blank | "Built by … · Hire me" in the banner. The link is hidden if the URL is blank. |
-| `PENNY_MAX_TURNS`, `PENNY_MAX_MESSAGE_CHARS`, `PENNY_MAX_IMAGES`, `PENNY_MAX_TOKENS`, `PENNY_MAX_TRANSCRIPT_CHARS` | 30, 1500, 3, 4096, 60000 | Per-conversation caps. |
+| `PENNY_MAX_TURNS`, `PENNY_MAX_MESSAGE_CHARS`, `PENNY_MAX_IMAGES`, `PENNY_MAX_UPLOADS`, `PENNY_MAX_TOKENS`, `PENNY_MAX_TRANSCRIPT_CHARS` | 30, 1500, 6, 3, 4096, 60000 | Per-conversation caps. |
 | `PENNY_RATE_PER_MINUTE`, `PENNY_RATE_PER_DAY` | 20, 200 | Per-IP rate limits. |
 | `PENNY_DAILY_LIVE_TURNS`, `PENNY_DAILY_BUDGET_USD` | 1500, 5 | Global daily live budget (turns and estimated dollars) before falling back to replay. |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | blank | Optional. Makes the rate limit and daily budget shared across serverless instances. Recommended for a public live link. |

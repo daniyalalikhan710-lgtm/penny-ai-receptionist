@@ -12,6 +12,14 @@ Things that are true about this build and worth knowing. None blocks the demo.
 - **The sample photos show the equipment, not an active fault.** Unsplash had no free photo of, for example, a visibly leaking tank water heater or a thermostat showing an error code. Penny's replay diagnoses therefore describe only what is visible and say so when the photo shows nothing wrong (the AC and thermostat diagnoses are low and medium confidence on purpose).
 - **The water heater photo is an outdoor heat-pump installation**, not a typical basement tank. It was the best free option. If you have a better photo, replace `public/samples/water-heater.jpg` and its `-thumb.jpg`, and update the description in `src/lib/server/engine/replay.ts` (`PHOTO_SCRIPTS`) and `CREDITS.md`.
 
+## Raised by the fresh-eyes review and left as they are
+
+- **There is no way to contact the builder from the demo.** "Built by Daniyal Ali Khan" is plain text and the case study ends without a hire button, because `NEXT_PUBLIC_HIRE_URL` is blank. Setting it adds "Hire me" to the banner and "Hire me to build yours" to the case study.
+- **Two tabs do not sync.** Each tab keeps its own copy in memory and the last one to save wins. Use one tab; two-tab sync is on the roadmap.
+- **In replay mode, anything outside the scripts gets a short "live AI is switched off" reply**, including an uploaded photo. The scripts cover the suggested prompts, all six sample photos and many common variations (prices, policies, hours, "I need a plumber", "talk to a person", cancel, reschedule), but a determined visitor will find the edge. This goes away with an API key.
+- **X-ray shows zero tokens and $0.00 in replay mode.** That is accurate: no model is called. The caching and cost numbers appear in live mode.
+- **Service names inside cards stay in English** when the conversation is in Spanish (they come from the price book); card labels and Penny's replies are in Spanish.
+
 ## By design, but worth knowing
 
 - **The hire link is hidden.** `NEXT_PUBLIC_HIRE_URL` is blank in `.env.local`, so the banner shows "Built by Daniyal Ali Khan" with no link. Add the URL and rebuild to show "Hire me".
