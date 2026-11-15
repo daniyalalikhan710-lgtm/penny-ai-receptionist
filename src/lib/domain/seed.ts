@@ -1,7 +1,7 @@
 import { addDays } from "./time";
 import { DEMO_CUSTOMER } from "./technicians";
 import { SLOT_DURATION } from "./slots";
-import type { Alert, Clock, DayStr, Job, JobSource, Lead, OutboundMessage, Urgency } from "./types";
+import type { Alert, Clock, Job, JobSource, Lead, OutboundMessage, Urgency } from "./types";
 
 /**
  * Seed data for a visitor's sandbox: a believable business mid-day, laid out
@@ -68,6 +68,16 @@ const SEED_JOBS: SeedJob[] = [
   { code: "CPL-4818", dayOffset: 5, startMin: 480, techId: "marcus", serviceCode: "FAUCET", serviceName: "Faucet and fixture repair", estLow: 145, estHigh: 390, customerName: "Leo Marchetti", address: "7 Willow Landing Dr, Willow Landing", urgency: "routine", source: "phone", summary: "Replace two bathroom faucets." },
 ];
 
+/**
+ * Seeded events happened "earlier today". For a visitor who arrives before
+ * that time of day, the event is moved to shortly before now instead of being
+ * left in the future.
+ */
+function earlierToday(minute: number, clock: Clock, order: number): number {
+  if (minute <= clock.nowMinutes) return minute;
+  return Math.max(0, clock.nowMinutes - 4 - order * 7);
+}
+
 function phoneFor(index: number): string {
   return `(555) 010-01${String(10 + index).padStart(2, "0")}`;
 }
@@ -111,7 +121,7 @@ export function seedJobs(clock: Clock): Job[] {
       // Jobs Penny booked "today" count toward today's KPIs; the rest were
       // booked on earlier days.
       createdDay: bookedToday ? clock.today : addDays(clock.today, -2),
-      createdAtMin: seed.bookedTodayAtMin ?? 600,
+      createdAtMin: seed.bookedTodayAtMin !== undefined ? earlierToday(seed.bookedTodayAtMin, clock, index % 5) : 600,
       conversationId: seed.leadId ?? null,
     };
   });
@@ -137,9 +147,9 @@ export function freshLiveLead(clock: Clock): Lead {
   };
 }
 
-export function seedLeads(today: DayStr): Lead[] {
-  const base = { startedDay: today, callbackPhone: null, live: false as const };
-  return [
+export function seedLeads(clock: Clock): Lead[] {
+  const base = { startedDay: clock.today, callbackPhone: null, live: false as const };
+  const leads: Lead[] = [
     {
       ...base,
       id: "lead-hank",
@@ -258,17 +268,19 @@ export function seedLeads(today: DayStr): Lead[] {
       ],
     },
   ];
+  return leads.map((lead, order) => ({ ...lead, startedAtMin: earlierToday(lead.startedAtMin, clock, order) }));
 }
 
-export function seedOutbox(today: DayStr): OutboundMessage[] {
+export function seedOutbox(clock: Clock): OutboundMessage[] {
+  let order = 0;
   const sms = (id: string, to: string, atMin: number, body: string, jobCode: string): OutboundMessage => ({
     id,
     channel: "sms",
     to,
     subject: null,
     body,
-    day: today,
-    atMin,
+    day: clock.today,
+    atMin: earlierToday(atMin, clock, order++),
     jobCode,
   });
   return [

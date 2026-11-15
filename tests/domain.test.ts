@@ -48,10 +48,18 @@ describe("seed data", () => {
     expect(seeded?.date).toBe(addDays(clock.today, 2));
   });
   it("seeds leads whose bookings exist", () => {
-    for (const lead of seedLeads(clock.today)) {
+    for (const lead of seedLeads(clock)) {
       if (lead.jobCode) expect(jobs.some((j) => j.code === lead.jobCode), lead.id).toBe(true);
     }
-    for (const message of seedOutbox(clock.today)) expect(jobs.some((j) => j.code === message.jobCode)).toBe(true);
+    for (const message of seedOutbox(clock)) expect(jobs.some((j) => j.code === message.jobCode)).toBe(true);
+  });
+  it("never shows an 'earlier today' event in the future, even before dawn", () => {
+    const night: Clock = { today: "2026-11-17", nowMinutes: 95, tz: "UTC" };
+    for (const lead of seedLeads(night)) expect(lead.startedAtMin).toBeLessThanOrEqual(night.nowMinutes);
+    for (const message of seedOutbox(night)) expect(message.atMin).toBeLessThanOrEqual(night.nowMinutes);
+    for (const job of seedJobs(night)) if (job.createdDay === night.today) expect(job.createdAtMin).toBeLessThanOrEqual(night.nowMinutes);
+    const morning = seedLeads(clock).map((l) => l.startedAtMin);
+    expect(morning).toContain(548);
   });
 });
 

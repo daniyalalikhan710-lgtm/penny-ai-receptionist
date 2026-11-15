@@ -174,9 +174,9 @@ function freshData(clock: Clock, keep?: Pick<DemoData, "view" | "xray">): DemoDa
   return {
     seedDay: clock.today,
     jobs: seedJobs(clock),
-    leads: seedLeads(clock.today),
+    leads: seedLeads(clock),
     lead: freshLiveLead(clock),
-    outbox: seedOutbox(clock.today),
+    outbox: seedOutbox(clock),
     alerts: seedAlerts(),
     messages: [],
     cardState: {},
