@@ -61,14 +61,17 @@ export function CopperlineSite({ onOpenChat }: { onOpenChat: () => void }) {
           <circle cx="220" cy="120" r="16" fill="#b87333" />
           <circle cx="360" cy="180" r="10" fill="#dea66c" />
         </svg>
-        <div className="relative max-w-xl">
+        <div className="relative max-w-xl @md:@max-3xl:max-w-[13.5rem]">
           <p className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[12px] font-medium text-copper-200 ring-1 ring-white/15">
-            <Clock className="size-3.5" aria-hidden /> Open 7 days · 8 AM to 6 PM · Emergency dispatch 24/7
+            <Clock className="size-3.5 shrink-0" aria-hidden />
+            <span>
+              Open 7 days · 8 AM to 6 PM<span className="@md:@max-3xl:hidden"> · Emergency dispatch 24/7</span>
+            </span>
           </p>
-          <h1 className="font-display text-[34px] leading-[1.05] font-semibold tracking-tight text-balance @2xl:text-[46px]">
+          <h1 className="font-display text-[34px] leading-[1.05] font-semibold tracking-tight text-balance @md:@max-3xl:text-[28px] @3xl:text-[46px]">
             Fixed right, priced upfront, <span className="text-copper-300">booked in minutes.</span>
           </h1>
-          <p className="mt-4 max-w-md text-[15px] leading-relaxed text-ink-200">
+          <p className="mt-4 max-w-md text-[15px] leading-relaxed text-ink-200 @md:@max-3xl:text-[14px]">
             Riverbend&rsquo;s plumbing, heating and cooling team. Tell Penny what&rsquo;s wrong, get an honest price range, and pick a time that suits you. No hold music.
           </p>
           <div className="mt-6 flex flex-wrap items-center gap-3">

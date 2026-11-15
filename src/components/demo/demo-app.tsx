@@ -1,6 +1,7 @@
 "use client";
 
-import { Columns2, LayoutDashboard, MessageCircle, MonitorSmartphone, RotateCcw, ScanSearch } from "lucide-react";
+import { Columns2, FileText, LayoutDashboard, MessageCircle, MonitorSmartphone, RotateCcw, ScanSearch } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useMediaQuery } from "@/lib/client/hooks";
@@ -105,6 +106,13 @@ function TopBar({ wide, view }: { wide: boolean; view: ViewMode }) {
             {mode === "live" ? `Live · ${model}` : "Replay mode"}
           </span>
         ) : null}
+        <Link
+          href="/case-study"
+          className="hidden h-8 items-center gap-1.5 rounded-lg px-2 text-[12.5px] font-semibold text-ink-200 ring-1 ring-ink-600 transition hover:bg-ink-800 xl:flex"
+        >
+          <FileText className="size-4" aria-hidden />
+          Case study
+        </Link>
         <button
           type="button"
           data-testid="xray-toggle"

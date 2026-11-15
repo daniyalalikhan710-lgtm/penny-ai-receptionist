@@ -1,25 +1,33 @@
 /**
- * Captures the README screenshots (and doubles as a visual smoke test).
+ * Captures the README screenshots, the case-study images and the walkthrough
+ * video. It drives the real app, so it doubles as a visual smoke test.
  *
- *   pnpm dev            # in another terminal
- *   pnpm screenshots    # writes docs/screenshots/*.png
+ *   pnpm build && pnpm start      # in another terminal (or `pnpm dev`)
+ *   pnpm screenshots              # writes docs/screenshots, public/screens, docs/demo.webm
  *
- * Options: --url http://localhost:3000  --out docs/screenshots  --only golden,mobile
+ * Options:
+ *   --url http://localhost:3000   where the app is running
+ *   --out docs/screenshots        where PNGs go
+ *   --only golden,mobile          run a subset of flows
+ *   --no-video                    skip docs/demo.webm
+ *
  * The browser clock is pinned to 10:30 AM today so the dispatch board always
  * shows the same mid-morning state.
  */
-import { mkdirSync } from "node:fs";
+import { mkdirSync, renameSync, rmSync } from "node:fs";
 import path from "node:path";
-import { chromium, type Browser, type Page } from "@playwright/test";
+import { chromium, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
 const args = process.argv.slice(2);
 const arg = (name: string, fallback: string) => {
-  const i = args.indexOf(`--${name}`);
+  const i = args.indexOf("--" + name);
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 };
 const BASE = arg("url", "http://localhost:3000");
 const OUT = path.resolve(arg("out", "docs/screenshots"));
+const WEB = path.resolve(arg("web", "public/screens"));
 const ONLY = arg("only", "").split(",").filter(Boolean);
+const VIDEO = !args.includes("--no-video");
 
 function tenThirtyToday(): Date {
   const d = new Date();
@@ -27,29 +35,36 @@ function tenThirtyToday(): Date {
   return d;
 }
 
-async function open(browser: Browser, viewport: { width: number; height: number }, options: { reducedMotion?: boolean; mobile?: boolean } = {}): Promise<Page> {
+interface OpenOptions {
+  mobile?: boolean;
+  video?: string;
+}
+
+async function open(browser: Browser, viewport: { width: number; height: number }, options: OpenOptions = {}): Promise<{ page: Page; context: BrowserContext }> {
   const context = await browser.newContext({
     viewport,
     deviceScaleFactor: 2,
-    reducedMotion: options.reducedMotion ? "reduce" : "no-preference",
     isMobile: options.mobile ?? false,
     hasTouch: options.mobile ?? false,
+    ...(options.video ? { recordVideo: { dir: options.video, size: viewport } } : {}),
   });
   const page = await context.newPage();
   await page.clock.install({ time: tenThirtyToday() });
   page.on("console", (message) => {
-    if (message.type() === "error") console.error(`[browser error] ${message.text()}`);
+    if (message.type() === "error") console.error("[browser error] " + message.text());
   });
-  page.on("pageerror", (error) => console.error(`[page error] ${error.message}`));
+  page.on("pageerror", (error) => console.error("[page error] " + error.message));
   await page.goto(BASE, { waitUntil: "networkidle" });
   await page.getByTestId("chat-widget").or(page.getByTestId("dashboard")).first().waitFor();
-  return page;
+  return { page, context };
 }
 
-async function shot(page: Page, name: string): Promise<void> {
-  await page.waitForTimeout(350);
-  await page.screenshot({ path: path.join(OUT, `${name}.png`) });
-  console.log(`  saved ${name}.png`);
+/** PNG for the README (CSS pixels, so files stay small) and optionally a JPEG for the site. */
+async function shot(page: Page, name: string, web?: string): Promise<void> {
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: path.join(OUT, name + ".png"), scale: "css" });
+  if (web) await page.screenshot({ path: path.join(WEB, web + ".jpg"), type: "jpeg", quality: 84, scale: "css" });
+  console.log("  saved " + name + ".png" + (web ? " (+ " + web + ".jpg)" : ""));
 }
 
 /** Waits until Penny has finished replying. */
@@ -64,91 +79,74 @@ async function say(page: Page, text: string): Promise<void> {
 
 async function golden(browser: Browser): Promise<void> {
   console.log("golden path");
-  const page = await open(browser, { width: 1440, height: 900 });
+  const { page, context } = await open(browser, { width: 1440, height: 900 });
   await shot(page, "01-start");
   await page.getByRole("button", { name: /My water heater is leaking/ }).click();
   await page.getByTestId("card-slots").waitFor({ timeout: 45_000 });
   await settled(page);
   await page.getByTestId("card-diagnosis").scrollIntoViewIfNeeded();
-  await shot(page, "02-diagnosis");
+  await shot(page, "02-diagnosis", "diagnosis");
   await page.getByTestId("card-slots").scrollIntoViewIfNeeded();
-  await shot(page, "03-slots");
   await page.getByTestId("slot-option").first().click();
   await page.getByTestId("card-details").waitFor({ timeout: 30_000 });
   await settled(page);
-  await shot(page, "04-details");
   await page.getByTestId("details-submit").click();
   await page.getByTestId("card-checkout").waitFor({ timeout: 30_000 });
   await settled(page);
-  await shot(page, "05-checkout");
+  await shot(page, "03-checkout");
   await page.getByTestId("pay-button").click();
-  await page.waitForTimeout(1500);
-  await shot(page, "06-flight");
   await page.getByTestId("card-confirmation").waitFor({ timeout: 30_000 });
   await settled(page);
-  await page.waitForTimeout(1200);
-  await shot(page, "07-confirmed");
+  await page.waitForTimeout(1500);
+  await shot(page, "04-booked", "booked");
   await page.getByTestId("xray-toggle").click();
   await page.waitForTimeout(400);
-  await shot(page, "08-xray");
-  await page.context().close();
+  await page.locator('[data-testid="xray-turn"] summary').first().click();
+  await shot(page, "05-xray", "xray");
+  await context.close();
 }
 
 async function emergency(browser: Browser): Promise<void> {
   console.log("emergency");
-  const page = await open(browser, { width: 1440, height: 900 });
+  const { page, context } = await open(browser, { width: 1440, height: 900 });
   await page.getByRole("button", { name: "I smell gas in my kitchen" }).click();
   await page.getByTestId("card-emergency").waitFor({ timeout: 30_000 });
   await settled(page);
-  await shot(page, "10-emergency");
   await page.getByTestId("callback-open").click();
   await page.getByTestId("callback-submit").click();
   await page.getByTestId("card-handoff").waitFor({ timeout: 30_000 });
   await settled(page);
-  await shot(page, "11-emergency-callback");
-  await page.context().close();
+  await page.getByTestId("card-emergency").scrollIntoViewIfNeeded();
+  await shot(page, "06-emergency", "emergency");
+  await context.close();
 }
 
 async function citations(browser: Browser): Promise<void> {
   console.log("citations");
-  const page = await open(browser, { width: 1440, height: 900 });
+  const { page, context } = await open(browser, { width: 1440, height: 900 });
   await page.getByRole("button", { name: "What's your warranty on repairs?" }).click();
   await page.getByTestId("citation-chip").first().waitFor({ timeout: 30_000 });
   await settled(page);
   await page.getByTestId("citation-chip").first().click();
-  await page.getByTestId("citation-highlight").waitFor({ timeout: 15_000 });
+  await page.getByTestId("citation-highlight").first().waitFor({ timeout: 15_000 });
   await page.waitForTimeout(600);
-  await shot(page, "12-citation-drawer");
-  await page.context().close();
+  await shot(page, "07-citations", "citation");
+  await context.close();
 }
 
 async function spanish(browser: Browser): Promise<void> {
   console.log("spanish");
-  const page = await open(browser, { width: 1440, height: 900 });
+  const { page, context } = await open(browser, { width: 1440, height: 900 });
   await page.getByRole("button", { name: /Pueden arreglar/ }).click();
   await page.getByTestId("card-slots").waitFor({ timeout: 30_000 });
   await settled(page);
-  await shot(page, "13-spanish");
-  await page.context().close();
-}
-
-async function reschedule(browser: Browser): Promise<void> {
-  console.log("reschedule");
-  const page = await open(browser, { width: 1440, height: 900 });
-  await page.getByRole("button", { name: /Reschedule my appointment/ }).click();
-  await page.getByTestId("card-slots").waitFor({ timeout: 30_000 });
-  await settled(page);
-  await page.getByTestId("slot-option").nth(1).click();
-  await page.getByTestId("card-confirmation").waitFor({ timeout: 30_000 });
-  await settled(page);
-  await page.waitForTimeout(800);
-  await shot(page, "14-reschedule");
-  await page.context().close();
+  await shot(page, "08-spanish");
+  await context.close();
 }
 
 async function takeover(browser: Browser): Promise<void> {
   console.log("takeover");
-  const page = await open(browser, { width: 1440, height: 900 });
+  const { page, context } = await open(browser, { width: 1440, height: 900 });
   await say(page, "Do you service 97406?");
   await page.getByTestId("card-service-area").waitFor({ timeout: 30_000 });
   await settled(page);
@@ -157,48 +155,80 @@ async function takeover(browser: Browser): Promise<void> {
   await page.getByTestId("staff-input").fill("Hi, Sam here from Copperline. Yes, we're in Millbrook every day. I can fit you in first thing tomorrow.");
   await page.getByTestId("staff-send").click();
   await page.waitForTimeout(500);
-  await shot(page, "15-takeover");
-  await page.getByTestId("hand-back").click();
-  await page.waitForTimeout(600);
-  await settled(page);
-  await page.waitForTimeout(600);
-  await shot(page, "16-handback");
-  await page.context().close();
+  await shot(page, "09-takeover");
+  await context.close();
+}
+
+async function owner(browser: Browser): Promise<void> {
+  console.log("owner and customer views");
+  const { page, context } = await open(browser, { width: 1440, height: 900 });
+  await page.getByTestId("view-owner").click();
+  await page.waitForTimeout(500);
+  await shot(page, "10-owner");
+  await page.getByTestId("view-customer").click();
+  await page.waitForTimeout(500);
+  await shot(page, "11-customer");
+  await context.close();
 }
 
 async function mobile(browser: Browser): Promise<void> {
   console.log("mobile");
-  const page = await open(browser, { width: 375, height: 812 }, { mobile: true });
-  await shot(page, "20-mobile-start");
+  const { page, context } = await open(browser, { width: 375, height: 812 }, { mobile: true });
+  await shot(page, "12-mobile-start");
   await page.getByRole("button", { name: /My water heater is leaking/ }).click();
   await page.getByTestId("card-slots").waitFor({ timeout: 45_000 });
   await settled(page);
   await page.getByTestId("card-diagnosis").scrollIntoViewIfNeeded();
-  await shot(page, "21-mobile-diagnosis");
+  await shot(page, "13-mobile-diagnosis");
+  await page.getByTestId("view-owner").click();
+  await page.waitForTimeout(500);
+  await shot(page, "14-mobile-owner");
+  await context.close();
+}
+
+/** A 1280x800 recording of the golden path, saved as docs/demo.webm. */
+async function video(browser: Browser): Promise<void> {
+  if (!VIDEO) return;
+  console.log("walkthrough video");
+  const dir = path.resolve("docs/.video-tmp");
+  rmSync(dir, { recursive: true, force: true });
+  const { page, context } = await open(browser, { width: 1280, height: 800 }, { video: dir });
+  const pause = (ms: number) => page.waitForTimeout(ms);
+  await pause(1500);
+  await page.getByRole("button", { name: /My water heater is leaking/ }).click();
+  await page.getByTestId("card-slots").waitFor({ timeout: 45_000 });
+  await settled(page);
+  await page.getByTestId("card-diagnosis").scrollIntoViewIfNeeded();
+  await pause(2500);
   await page.getByTestId("card-slots").scrollIntoViewIfNeeded();
-  await shot(page, "22-mobile-slots");
-  await page.getByTestId("view-owner").click();
-  await page.waitForTimeout(500);
-  await shot(page, "23-mobile-owner");
-  await page.context().close();
+  await pause(1500);
+  await page.getByTestId("slot-option").first().click();
+  await page.getByTestId("card-details").waitFor({ timeout: 30_000 });
+  await settled(page);
+  await pause(1500);
+  await page.getByTestId("details-submit").click();
+  await page.getByTestId("card-checkout").waitFor({ timeout: 30_000 });
+  await settled(page);
+  await pause(1800);
+  await page.getByTestId("pay-button").click();
+  await page.getByTestId("card-confirmation").waitFor({ timeout: 30_000 });
+  await settled(page);
+  await pause(3500);
+  const recording = page.video();
+  await context.close();
+  const file = await recording?.path();
+  if (file) {
+    renameSync(file, path.resolve("docs/demo.webm"));
+    console.log("  saved docs/demo.webm");
+  }
+  rmSync(dir, { recursive: true, force: true });
 }
 
-async function owner(browser: Browser): Promise<void> {
-  console.log("owner");
-  const page = await open(browser, { width: 1440, height: 900 });
-  await page.getByTestId("view-owner").click();
-  await page.waitForTimeout(500);
-  await shot(page, "30-owner");
-  await page.getByTestId("view-customer").click();
-  await page.waitForTimeout(500);
-  await shot(page, "31-customer");
-  await page.context().close();
-}
-
-const FLOWS: Record<string, (browser: Browser) => Promise<void>> = { golden, emergency, citations, spanish, reschedule, takeover, mobile, owner };
+const FLOWS: Record<string, (browser: Browser) => Promise<void>> = { golden, emergency, citations, spanish, takeover, owner, mobile, video };
 
 async function main(): Promise<void> {
   mkdirSync(OUT, { recursive: true });
+  mkdirSync(WEB, { recursive: true });
   const browser = await chromium.launch();
   try {
     for (const [name, flow] of Object.entries(FLOWS)) {

@@ -114,6 +114,52 @@ const STORAGE_KEY = "penny-demo-v1";
 
 const NO_STORAGE = { getItem: () => null, setItem: () => undefined, removeItem: () => undefined };
 
+/**
+ * localStorage, written at most a few times a second. A streamed reply updates
+ * the store on every token; serialising the whole sandbox that often would
+ * make the chat stutter. Pending writes are flushed when the tab is hidden.
+ */
+function createThrottledStorage() {
+  let pending: { key: string; value: string } | null = null;
+  let timer: number | null = null;
+  const flush = () => {
+    if (timer !== null) window.clearTimeout(timer);
+    timer = null;
+    if (!pending) return;
+    try {
+      window.localStorage.setItem(pending.key, pending.value);
+    } catch {
+      // Storage full or blocked: the demo still works, it just won't persist.
+    }
+    pending = null;
+  };
+  window.addEventListener("pagehide", flush);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flush();
+  });
+  return {
+    getItem: (key: string) => {
+      try {
+        return window.localStorage.getItem(key);
+      } catch {
+        return null;
+      }
+    },
+    setItem: (key: string, value: string) => {
+      pending = { key, value };
+      if (timer === null) timer = window.setTimeout(flush, 300);
+    },
+    removeItem: (key: string) => {
+      pending = null;
+      try {
+        window.localStorage.removeItem(key);
+      } catch {
+        // ignore
+      }
+    },
+  };
+}
+
 function now(): Clock {
   return clockFromDate(new Date());
 }
@@ -409,7 +455,7 @@ export const useDemo = create<DemoStore>()(
       name: STORAGE_KEY,
       version: 1,
       // On the server there is no browser storage; a no-op keeps prerendering quiet.
-      storage: createJSONStorage(() => (typeof window === "undefined" ? NO_STORAGE : window.localStorage)),
+      storage: createJSONStorage(() => (typeof window === "undefined" ? NO_STORAGE : createThrottledStorage())),
       skipHydration: true,
       partialize: (s): DemoData => ({
         seedDay: s.seedDay,

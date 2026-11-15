@@ -317,7 +317,6 @@ describe("runTurn mode selection", () => {
         messages: {
           stream() {
             return {
-              // eslint-disable-next-line require-yield
               async *[Symbol.asyncIterator]() {
                 throw new Anthropic.APIConnectionError({ message: "boom" });
               },
