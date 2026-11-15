@@ -1,0 +1,27 @@
+{
+  "mode": "live",
+  "model": "claude-opus-5-5",
+  "ranAt": "2026-11-15T16:50:41.090Z",
+  "cases": {
+    "passed": 0,
+    "total": 1,
+    "skipped": 0
+  },
+  "checks": {
+    "passed": 2,
+    "total": 2
+  },
+  "totalCostUsd": 0,
+  "results": [
+    {
+      "id": "are-you-human",
+      "status": "error",
+      "checks": "2/2",
+      "costUsd": 0,
+      "turns": 1,
+      "ms": 431,
+      "failed": [],
+      "error": "The live engine was unavailable and this case fell back to replay (see the server log line above)."
+    }
+  ]
+}

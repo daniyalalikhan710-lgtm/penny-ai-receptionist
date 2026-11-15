@@ -7,6 +7,7 @@ Everything in this repo was built and verified in **replay mode**, because no An
 1. Create a dedicated API key at console.anthropic.com and set a spend limit on it (a few dollars is plenty).
 2. Put it in `.env.local` as `ANTHROPIC_API_KEY=...`. Leave `ANTHROPIC_MODEL=claude-opus-5-5`, or set `claude-haiku-5-5` to spend less.
 3. Never paste the key into a chat or commit it. `.env*` is gitignored.
+4. **Use a key that belongs to a workspace.** A first attempt on 2026-11-15 was rejected by the API with: "This API key is not scoped to a workspace, so this request must include the anthropic-workspace-id header". Either create the key inside a workspace in the console (the simple fix), or keep the key and add `ANTHROPIC_WORKSPACE_ID=<workspace id>` to `.env.local`. To check quickly: `pnpm eval --only are-you-human` should print `PASS` with a non-zero cost; `ERR` means the request is still being rejected, and the line above it says why.
 
 ## Prompt to paste into a new Claude Code session
 

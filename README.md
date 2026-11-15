@@ -138,6 +138,7 @@ All are documented in [`.env.example`](.env.example).
 | Variable | Default | Purpose |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | blank | Blank means replay mode. Use a dedicated key with a spend limit. |
+| `ANTHROPIC_WORKSPACE_ID` | blank | Only for a key that is not scoped to one workspace: the workspace to bill. |
 | `ANTHROPIC_MODEL` | `claude-opus-5-5` | Model for live mode. |
 | `ANTHROPIC_EFFORT` | `low` | Reasoning effort. Keep it constant; changing it invalidates the cache. |
 | `PENNY_MODE` | blank | Set to `replay` to force the scripted engine. |

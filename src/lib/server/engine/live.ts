@@ -168,7 +168,14 @@ export function createLiveEngine(config: LiveConfig): Engine {
         } catch (error) {
           if (options?.signal?.aborted) return { stopReason: "aborted" };
           const userMessage = describeApiError(error);
-          const detail = error instanceof Error ? error.name : "unknown error";
+          // For the server log only: the API's own message says what to fix.
+          // It never contains the key, and it is not sent to the browser.
+          const detail =
+            error instanceof Anthropic.APIError
+              ? `${error.name} ${error.status ?? ""}: ${String(error.message).slice(0, 400)}`
+              : error instanceof Error
+                ? error.name
+                : "unknown error";
           if (!emittedAnything) throw new LiveUnavailableError(detail, userMessage);
           emit({ type: "notice", code: "error", message: `${userMessage} Please try that again.` });
           return { stopReason: "error" };
@@ -231,5 +238,9 @@ export function createLiveEngine(config: LiveConfig): Engine {
 
 export function createAnthropicClient(): MessagesClient {
   // Reads ANTHROPIC_API_KEY from the environment. The key never leaves the server.
-  return new Anthropic() as unknown as MessagesClient;
+  // A key that is not tied to one workspace must say which workspace to use;
+  // ANTHROPIC_WORKSPACE_ID supplies that. Workspace-scoped keys do not need it.
+  const workspace = process.env.ANTHROPIC_WORKSPACE_ID?.trim();
+  const client = workspace ? new Anthropic({ defaultHeaders: { "anthropic-workspace-id": workspace } }) : new Anthropic();
+  return client as unknown as MessagesClient;
 }

@@ -85,6 +85,10 @@ async function main(): Promise<void> {
     } catch (caught) {
       error = caught instanceof Error ? caught.name + ": " + caught.message : String(caught);
     }
+    // A live run that quietly fell back to the scripts has not tested the model.
+    if (mode === "live" && !error && driver.turns.some((turn) => turn.mode === "replay")) {
+      error = "The live engine was unavailable and this case fell back to replay (see the server log line above).";
+    }
     const costUsd = driver.turns.reduce((sum, turn) => sum + turn.usage.reduce((s, u) => s + (u.costUsd ?? 0), 0), 0);
     const failed = checks.filter((c) => !c.pass);
     const status: CaseResult["status"] = error ? "error" : failed.length > 0 ? "fail" : "pass";
