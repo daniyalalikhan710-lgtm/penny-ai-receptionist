@@ -4,8 +4,17 @@ Things that are true about this build and worth knowing. None blocks the demo.
 
 ## Not yet verified
 
-- **The live engine has not been run against the real Claude API.** No API key was available at build time. It type-checks and passes unit tests against a stubbed SDK client, and the request shape follows the SDK documentation, but the first real call may need a small fix. See `docs/live-verification.md`.
-- **Cost per conversation is an estimate, not a measurement**, for the same reason.
+The live engine was verified against the real Claude API on 2026-11-16 (see `docs/live-verification.md`). What that did not cover:
+
+- **A deployed copy.** Everything was run locally (`pnpm dev`, `pnpm build`). The Vercel deployment, its environment variables and the 4.5 MB request limit have not been exercised on Vercel itself.
+- **Upstash Redis.** The shared rate limit and daily budget are unit-tested against a stubbed store, not a real Upstash database.
+- **Uploading your own photo by hand in live mode.** Uploaded images were tested live through the eval harness (two cases, same server path) and the upload control through the browser tests in replay mode, but nobody picked a file from a real phone camera roll against the live model.
+- **Live behaviour varies from run to run.** The evals assert on tool calls and key facts, and passed in full on both models, but wording differs every time and a single passing run is not a guarantee. Re-run `pnpm eval` after any change to the prompt, the tools or the documents.
+
+## Seen in live mode
+
+- **The photo turn is the slow one.** On Claude Opus 5.5 the first words of a photo diagnosis took about 9 seconds to appear in the browser check; the chat shows "Looking at your photo…" meanwhile. The later steps of a booking (details form, holding the slot) took about 4 to 8 seconds each from tap to finished reply.
+- **The screenshots and the video in this repo were captured in replay mode**, so their wording is the scripted wording. Live replies say the same things in different words.
 
 ## Sample photos
 

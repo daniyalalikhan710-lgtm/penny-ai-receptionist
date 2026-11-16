@@ -4,6 +4,7 @@ import { BookOpen, Camera, ImagePlus, Lightbulb, Minus, SendHorizontal, UserRoun
 import Image from "next/image";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { cn } from "@/lib/utils";
+import { tr } from "@/lib/client/i18n";
 import { prepareUpload } from "@/lib/client/image";
 import { useDemo } from "@/lib/client/store";
 import { turnText, type AssistantPart, type ChatMessage, type PlacedCitation } from "@/lib/domain/chat";
@@ -77,6 +78,14 @@ function TextPart({ part }: { part: Extract<AssistantPart, { type: "text" }> }) 
       cursor = at;
     }
     if (cursor < part.text.length || out.length === 0) out.push({ text: part.text.slice(cursor), citations: [] });
+    // A citation often lands just before the sentence's closing punctuation.
+    // Keep that punctuation with the sentence so the chip follows the full stop.
+    for (let i = 1; i < out.length; i++) {
+      const lead = /^[.,;:!?)\]\u00BB\u201D\u2019]+/.exec(out[i].text)?.[0];
+      if (!lead) continue;
+      out[i - 1].text += lead;
+      out[i].text = out[i].text.slice(lead.length);
+    }
     return out;
   }, [part]);
 
@@ -84,7 +93,8 @@ function TextPart({ part }: { part: Extract<AssistantPart, { type: "text" }> }) 
   return (
     <div className="w-fit max-w-full rounded-2xl rounded-tl-md border border-ink-100 bg-white px-3.5 py-2.5 text-[14px] leading-relaxed whitespace-pre-wrap text-ink-900 shadow-sm">
       {segments.map((segment, i) => {
-        const text = i === 0 ? segment.text.replace(/^\s+/, "") : segment.text;
+        // A chip is followed by one space already, so drop the text's own.
+        const text = i === 0 ? segment.text.replace(/^\s+/, "") : segment.text.replace(/^[ \t]+/, "");
         if (segment.citations.length === 0) return <Fragment key={i}>{text}</Fragment>;
         // Keep the chip on the same line as the last word of the claim it
         // supports, so it never opens the next line as if it belonged to it.
@@ -107,17 +117,24 @@ function TextPart({ part }: { part: Extract<AssistantPart, { type: "text" }> }) 
   );
 }
 
-function TypingDots() {
+/** `label` says what the wait is for when it is likely to be a long one. */
+function TypingDots({ label }: { label?: string }) {
   return (
-    <div className="flex w-fit items-center gap-1 rounded-2xl rounded-tl-md border border-ink-100 bg-white px-3.5 py-3 shadow-sm" role="status" aria-label="Penny is typing">
+    <div
+      className="flex w-fit items-center gap-1 rounded-2xl rounded-tl-md border border-ink-100 bg-white px-3.5 py-3 shadow-sm"
+      role="status"
+      aria-label={label ?? "Penny is typing"}
+      data-testid="typing"
+    >
       {[0, 1, 2].map((i) => (
         <span key={i} className="typing-dot size-1.5 rounded-full bg-ink-400" style={{ animationDelay: `${i * 0.15}s` }} />
       ))}
+      {label ? <span className="ml-1.5 text-[12.5px] leading-none text-ink-600">{label}</span> : null}
     </div>
   );
 }
 
-function AssistantMessage({ message, lang }: { message: Extract<ChatMessage, { role: "assistant" }>; lang: Lang }) {
+function AssistantMessage({ message, lang, waitLabel }: { message: Extract<ChatMessage, { role: "assistant" }>; lang: Lang; waitLabel?: string }) {
   const { turn, streaming } = message;
   const visibleNotices = turn.notices.filter((n) => n.code !== "off_script");
   const hasContent = turn.parts.some((p) => (p.type === "text" ? p.text.trim() : p.card));
@@ -136,7 +153,7 @@ function AssistantMessage({ message, lang }: { message: Extract<ChatMessage, { r
             <CardView key={part.id} card={part.card} toolId={part.id} lang={lang} />
           ) : null,
         )}
-        {waiting && <TypingDots />}
+        {waiting && <TypingDots label={hasContent ? undefined : waitLabel} />}
         {visibleNotices.map((notice, i) => (
           <p
             key={i}
@@ -183,7 +200,7 @@ function UserImage({ message }: { message: Extract<ChatMessage, { role: "user" }
   );
 }
 
-function MessageRow({ message, lang }: { message: ChatMessage; lang: Lang }) {
+function MessageRow({ message, lang, waitLabel }: { message: ChatMessage; lang: Lang; waitLabel?: string }) {
   switch (message.role) {
     case "user":
       return (
@@ -197,7 +214,7 @@ function MessageRow({ message, lang }: { message: ChatMessage; lang: Lang }) {
         </div>
       );
     case "assistant":
-      return <AssistantMessage message={message} lang={lang} />;
+      return <AssistantMessage message={message} lang={lang} waitLabel={waitLabel} />;
     case "staff":
       return (
         <div className="flex items-start gap-2" data-testid="staff-message">
@@ -455,6 +472,16 @@ export function ChatWidget({ onMinimize }: { onMinimize?: () => void }) {
 
   const empty = messages.length === 0;
   const last = messages[messages.length - 1];
+  // Reading a photo takes the model several seconds: say so instead of bare dots.
+  const waitLabel = useMemo(() => {
+    if (!sending) return undefined;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      if (message.role === "user") return message.image ? tr(lang, "lookingAtPhoto") : undefined;
+      if (message.role !== "assistant") return undefined;
+    }
+    return undefined;
+  }, [messages, sending, lang]);
 
   // Keep the newest content in view unless the visitor has scrolled up to read.
   // The one exception is a safety card: its headline must not scroll away.
@@ -540,12 +567,12 @@ export function ChatWidget({ onMinimize }: { onMinimize?: () => void }) {
             </div>
           </div>
           {messages.map((message) => (
-            <MessageRow key={message.id} message={message} lang={lang} />
+            <MessageRow key={message.id} message={message} lang={lang} waitLabel={message === last ? waitLabel : undefined} />
           ))}
           {sending && last?.role !== "assistant" ? (
             <div className="flex items-start gap-2">
               <PennyAvatar size={28} className="mt-0.5" />
-              <TypingDots />
+              <TypingDots label={waitLabel} />
             </div>
           ) : null}
         </div>

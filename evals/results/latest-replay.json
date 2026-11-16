@@ -1,7 +1,7 @@
 {
   "mode": "replay",
   "model": "replay",
-  "ranAt": "2026-11-15T16:51:36.736Z",
+  "ranAt": "2026-11-16T09:33:24.246Z",
   "cases": {
     "passed": 14,
     "total": 14,
@@ -136,7 +136,7 @@
       "checks": "3/3",
       "costUsd": 0,
       "turns": 0,
-      "ms": 25,
+      "ms": 24,
       "failed": []
     },
     {

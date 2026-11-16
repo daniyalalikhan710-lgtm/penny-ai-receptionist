@@ -286,6 +286,8 @@ export interface CitationView {
   quote: string;
   start: number;
   end: number;
+  /** True when the server matched the passage itself because the model left its citation off. */
+  matched?: boolean;
 }
 
 export interface UsageView {
@@ -314,7 +316,7 @@ export type NoticeCode =
 export type StreamEvent =
   | { type: "meta"; mode: "live" | "replay"; model: string | null }
   | { type: "text"; text: string }
-  | { type: "citation"; citation: CitationView }
+  | { type: "citation"; citation: CitationView; /** Characters back from the end of the text so far; 0 or absent means "here". */ back?: number }
   | { type: "tool_call"; id: string; name: string; input: unknown }
   | {
       type: "tool_result";

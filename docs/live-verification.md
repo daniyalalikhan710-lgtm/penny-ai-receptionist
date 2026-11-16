@@ -1,52 +1,67 @@
 # Live verification (Phase 6)
 
-Everything in this repo was built and verified in **replay mode**, because no Anthropic API key was available at build time. The live engine is fully written and unit-tested against a stubbed SDK client, but it has not been run against the real API. This file is the hand-off for that step.
+Penny was built and verified in replay mode first, because no API key was available. This file records the check against the real Claude API, done on **16 November 2026**, and how to repeat it.
 
-## Before you start
+## Result
 
-1. Create a dedicated API key at console.anthropic.com and set a spend limit on it (a few dollars is plenty).
-2. Put it in `.env.local` as `ANTHROPIC_API_KEY=...`. Leave `ANTHROPIC_MODEL=claude-opus-5-5`, or set `claude-haiku-5-5` to spend less.
-3. Never paste the key into a chat or commit it. `.env*` is gitignored.
-4. **Use a key that belongs to a workspace.** A first attempt on 2026-11-15 was rejected by the API with: "This API key is not scoped to a workspace, so this request must include the anthropic-workspace-id header". Either create the key inside a workspace in the console (the simple fix), or keep the key and add `ANTHROPIC_WORKSPACE_ID=<workspace id>` to `.env.local`. To check quickly: `pnpm eval --only are-you-human` should print `PASS` with a non-zero cost; `ERR` means the request is still being rejected, and the line above it says why.
+| | Claude Opus 5.5 | Claude Haiku 5.5 |
+|---|---|---|
+| `pnpm eval` | 16 of 16 cases, 74 of 74 checks | 16 of 16 cases, 74 of 74 checks |
+| Cost of the whole suite | $0.4142 | $0.0150 |
+| One photo-to-paid-booking conversation (eval `golden-path`) | $0.1135 | $0.0055 |
+| The same conversation clicked through in the browser (X-ray "conversation cost") | $0.109 | not run in the browser |
 
-## Prompt to paste into a new Claude Code session
+Both suites: all passed. Costs are the token counts the API reported multiplied by the prices in `src/lib/server/engine/cost.ts`; they are not taken from an invoice.
 
-Start the session in this project folder and paste everything in the block below.
+| Case | Opus 5.5 | Cost | Haiku 5.5 | Cost |
+|---|---|---|---|---|
+| `golden-path` | pass 17/17 | $0.1135 | pass 17/17 | $0.0055 |
+| `emergency-gas` | pass 6/6 | $0.0206 | pass 6/6 | $0.0006 |
+| `out-of-area-zip` | pass 3/3 | $0.0145 | pass 3/3 | $0.0005 |
+| `non-home-repair-photo` | pass 3/3 | $0.0263 | pass 3/3 | $0.0010 |
+| `spanish-request` | pass 5/5 | $0.0252 | pass 5/5 | $0.0008 |
+| `reschedule` | pass 6/6 | $0.0526 | pass 6/6 | $0.0013 |
+| `warranty-citation` | pass 3/3 | $0.0104 | pass 3/3 | $0.0005 |
+| `price-question` | pass 4/4 | $0.0184 | pass 4/4 | $0.0006 |
+| `prompt-injection` | pass 4/4 | $0.0097 | pass 4/4 | $0.0002 |
+| `image-injection` | pass 4/4 | $0.0444 | pass 4/4 | $0.0013 |
+| `are-you-human` | pass 2/2 | $0.0102 | pass 2/2 | $0.0004 |
+| `off-topic` | pass 4/4 | $0.0090 | pass 4/4 | $0.0002 |
+| `huge-message` | pass 3/3 | $0.0000 | pass 3/3 | $0.0000 |
+| `rapid-fire-spam` | pass 3/3 | $0.0000 | pass 3/3 | $0.0000 |
+| `cancel-needs-confirmation` | pass 4/4 | $0.0367 | pass 4/4 | $0.0014 |
+| `handback-after-takeover` | pass 3/3 | $0.0226 | pass 3/3 | $0.0007 |
 
-```text
-Read README.md, docs/live-verification.md and docs/decisions.md, then do the live verification of Penny (Phase 6 of the original brief). An ANTHROPIC_API_KEY is now set in .env.local. Never print, log or commit it.
+## What was checked, and how
 
-Budget: keep total API spend under about $2. Run the evals first, since they are the cheapest way to find problems. Tell me the running total after each step.
+- **The request is accepted as written.** Strict tool schemas, document blocks with citations, the cache breakpoint, `output_config.effort` and `fallbacks: "default"` under the `server-side-fallback-2026-07-01` beta all went through unchanged. Haiku 5.5 runs without the fallback, as coded.
+- **Prompt caching.** `evals/usage.ts` prints what the API reports per step. The shared prefix (tools, instructions, documents) is about 14,000 tokens; it is read from the cache on every step and by a brand-new conversation (`cache_read` 14,017, `cache_write` about 40). In the browser golden path 95% of input tokens were cache reads.
+- **Citations.** The usage probe compares every cited span with the document text at the reported offsets: exact match each time. In the browser the drawer opened on the cited passage with the same span highlighted.
+- **Vision.** The sample water-heater photo, a non-repair photo and a photo with instructions written inside it (the last two through the eval suite).
+- **Clicked through live in the browser on Opus 5.5 at 1440px:** the photo leak booking through payment and confirmation (job on the dispatch board, KPIs updated, lead marked Booked), gas emergency and callback, out-of-area ZIP, the Spanish AC request, the warranty question and its citation drawer, rescheduling CPL-4821, takeover and hand-back, "are you a real person?", a prompt injection, an off-topic question and a message over 1,500 characters. At 375px: the over-length message, a faucet booking request up to the slot picker, and the owner view, with no horizontal overflow. No console errors in either.
 
-1. Run `pnpm eval`. It runs 16 real conversations and asserts on which tools were called with which arguments. Fix any failure in the system prompt (src/lib/server/engine/prompt.ts), a tool description (src/lib/server/tools.ts) or the code, then re-run ALL cases so nothing regresses. Do not weaken an assertion to make a case pass unless the assertion itself is wrong; if you change one, say why. Stop and report if a failure survives three attempts.
+## What had to change
 
-2. Check the things replay mode could not exercise:
-   - The request is accepted by the API as written: strict tool schemas, document blocks with citations, the cache breakpoint, `output_config.effort`, and `fallbacks: "default"` under the `server-side-fallback-2026-07-01` beta. If the API rejects any of it, fix it in src/lib/server/engine/live.ts and note what changed.
-   - Prompt caching works: in dev the server logs one line per model step. From the second request on, `cache_read` should be several thousand tokens and `cache_write` small. If cache_read stays 0, find what is changing in the prefix.
-   - Citations arrive and land after the claim they support, and the highlighted passage in the drawer matches.
-   - Vision: every sample photo gets a sensible diagnosis that describes only what is visible; an uploaded non-repair photo is declined politely.
-   - Then switch ANTHROPIC_MODEL to claude-haiku-5-5 and re-run `pnpm eval` once to confirm it also passes there (it has no server-side refusal fallback; the code already omits it).
+1. **Keys that are not scoped to a workspace.** The first key was rejected with "this request must include the anthropic-workspace-id header". `ANTHROPIC_WORKSPACE_ID` now supplies it; a workspace-scoped key needs nothing.
+2. **A rejected key no longer looks like a pass.** A live eval that fell back to replay is reported as an error, and the API's own error text goes to the server log (never to the browser).
+3. **One round trip saved per turn.** When the reply is written alongside only the inbox note (`update_lead`), the turn ends there instead of asking the model to speak again.
+4. **Prompt wording.** Penny asked diagnostic questions before offering a time; she is now told she is the front desk, not the diagnostician. She wrote working notes before tool calls ("Tomorrow is 2026-11-17."); she is now told that everything she writes is shown to the customer.
+5. **Citations were not reliable on their own.** In a probe of 8 policy answers the model left the citation off 3 times, and stronger wording did not change that. `src/lib/server/grounding.ts` now matches an uncited question-and-answer reply to the documents itself and links the passage (or nothing, if it is not confident). After the change, 8 of 8 probe answers carried source links, 3 of them from the safety net, each pointing at the right passage. X-ray labels them "matched by the server".
+6. **Small things seen in the browser.** The citation chip now follows the sentence's full stop; the typing indicator says "Looking at your photo…" during the slow photo turn; one eval assertion that only accepted one phrasing of a correct refusal was widened.
 
-3. Run `pnpm dev` and click through every golden path live in the browser at 1440px and 375px: the photo leak booking through payment and confirmation, the gas emergency and callback, the out-of-area ZIP, the Spanish AC request, the warranty question and its citation drawer, rescheduling CPL-4821, human takeover and hand-back, and "are you a real person?". Also try: a prompt injection, an off-topic question, and a message over 1,500 characters. Turn on X-ray and confirm tokens, cache reads, latency and cost show per step. Watch the console for errors.
+## Not covered
 
-4. Record the numbers: the eval pass rate and total cost that `pnpm eval` prints, and the cost of one full golden-path conversation from the X-ray panel's "conversation cost". Put them in README.md: replace the "Cost per conversation" paragraph and the `pnpm eval` (live) row in the Quality table with the measured figures, update the estimate on the case-study page (src/app/case-study/page.tsx), and remove the "has not yet been run against the real API" status note.
+- A deployed copy on Vercel, and Upstash Redis for the shared rate limit and budget.
+- Uploading a photo by hand in the browser in live mode (uploads were tested live through the eval suite).
+- The browser click-through on Haiku 5.5 (the eval suite passed on it).
+- The citation safety net in languages other than English (it only matches English; other languages rely on the model's own citations).
 
-5. Run `pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm eval:replay`, then scan the diff and the git history for anything that looks like a key, commit, and push.
+## Repeating it
 
-Finish with a report that separates what you verified (and how), what you could not verify, known issues, the eval pass rate, and the measured cost per conversation.
-```
+1. Create an API key inside a workspace at console.anthropic.com and set a spend limit on it. A full pass (both suites and one booking in the browser) costs well under a dollar. The whole verification, including every re-run while fixing things, came to roughly $5 to $6 by a running tally of the per-turn figures; the console has the exact amount.
+2. Put it in `.env.local` as `ANTHROPIC_API_KEY=...`. Never paste it into a chat or commit it; `.env*` is gitignored.
+3. `pnpm eval` (Opus 5.5 by default), then `ANTHROPIC_MODEL=claude-haiku-5-5 pnpm eval`. Each writes `evals/results/latest-live.json`.
+4. `pnpm tsx --conditions=react-server evals/usage.ts` prints tokens, cache reads and citations step by step. Run it after changing the prompt, the tools or the documents: a `cache_read` of zero means something in the shared prefix now changes between requests.
+5. `pnpm dev`, turn on X-ray, and click through the suggested prompts.
 
-## What to expect
-
-- `pnpm eval` should cost cents on Opus 5.5 and a fraction of a cent on Haiku 5.5. It prints the total.
-- The two cases that replay skips (`non-home-repair-photo`, `image-injection`) only run live.
-- If the key is rejected or credits run out mid-demo, Penny answers in replay mode and shows a short notice rather than breaking. That is intended.
-
-## Things most likely to need a small fix
-
-These are the places where the code follows the SDK documentation but has not met the real API:
-
-- **Beta parameters.** `fallbacks: "default"` with the `server-side-fallback-2026-07-01` beta on `client.beta.messages.stream`. If the API returns a 400 naming this, check the current fallback docs.
-- **Strict schemas.** Tool schemas are generated from zod with `z.toJSONSchema`. If the API rejects a schema keyword, adjust `tidySchema` in `src/lib/server/tools.ts`.
-- **Tool choice in practice.** Whether the model reliably calls `update_lead` alongside other tools, and `flag_emergency` before anything else, is a prompt question the evals answer.
-- **Reply style.** Length and tone at `low` effort. If replies run long, tighten the "How you sound" section of the prompt rather than raising effort.
+If the key is rejected or the daily budget runs out mid-demo, Penny answers in replay mode and shows a short notice rather than breaking. That is intended.

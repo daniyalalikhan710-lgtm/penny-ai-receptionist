@@ -126,6 +126,12 @@ function TurnCard({ row }: { row: TurnRow }) {
                   <li key={i} className="rounded-lg bg-ink-900 px-2 py-1.5 text-[11.5px] leading-snug text-ink-100">
                     <span className="font-semibold text-copper-300">{c.docTitle}</span>
                     <span className="text-ink-400"> · chars {c.start}–{c.end}</span>
+                    {c.matched ? (
+                      <span className="text-ink-300" title="The model answered without citing, so the server matched this sentence to the document itself.">
+                        {" "}
+                        · matched by the server
+                      </span>
+                    ) : null}
                     <span className="mt-0.5 block text-ink-200">&ldquo;{c.quote.length > 140 ? `${c.quote.slice(0, 140)}…` : c.quote}&rdquo;</span>
                   </li>
                 ))}

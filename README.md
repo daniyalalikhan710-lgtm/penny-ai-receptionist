@@ -48,7 +48,7 @@ Penny runs in one of two modes, chosen automatically:
 
 Both engines emit the same event stream and call **the same server tool functions**. In replay mode the price book, availability, bookings, state patches, cards, dashboard, takeover and caps are all genuinely exercised; only the language model's choices are scripted. Replay also stays in the shipped product as a safety net: if the key is missing, invalid, or the daily live budget is used up, the demo falls back to replay instead of breaking.
 
-> **Status of this repo:** everything has been built and verified in replay mode. The live engine is fully written and covered by unit tests against a stubbed SDK client, but it has **not yet been run against the real API**. [`docs/live-verification.md`](docs/live-verification.md) is the checklist for that step.
+> **Status of this repo:** built and verified in replay mode first, then verified against the real Claude API on 16 November 2026, on both Claude Opus 5.5 and Claude Haiku 5.5. [`docs/live-verification.md`](docs/live-verification.md) records what was checked, what had to change, and what it cost.
 
 ## Architecture
 
@@ -85,13 +85,13 @@ Key files:
 
 **Tool loop.** The live engine uses the official `@anthropic-ai/sdk` and a manual streaming loop: stream a step, forward text deltas, run any tool calls, send all results back in one message, repeat (capped at six steps). Tools are declared with `strict: true` schemas and every input is validated again with zod before it runs. The model is `ANTHROPIC_MODEL` (default `claude-opus-5-5`; `claude-haiku-5-5` also works) at `ANTHROPIC_EFFORT` (default `low`).
 
-**Citations.** The eight documents are sent as document blocks with citations enabled. Claude's cited spans come back as character ranges into the same plain text the drawer displays, so the highlight is exact. The pricing document is generated from the price book, so a cited price and a tool-returned price cannot disagree.
+**Citations.** The eight documents are sent as document blocks with citations enabled. Claude's cited spans come back as character ranges into the same plain text the drawer displays, so the highlight is exact. The pricing document is generated from the price book, so a cited price and a tool-returned price cannot disagree. Live testing showed the model occasionally gives a correct policy answer and leaves the citation off, so there is a safety net: when a question-and-answer reply arrives with no citations, the server matches each sentence against the documents itself (word matching plus a check that every figure in the sentence appears in the passage; no second model call) and links the passage, or links nothing if it is not confident. X-ray labels those links "matched by the server".
 
 **Prompt caching.** Tools, system prompt and documents are identical for every visitor and every turn, so they sit behind one cache breakpoint and are shared across all conversations. The conversation tail uses automatic caching. History is rebuilt deterministically from the transcript, so each request extends the previous one's prefix. X-ray mode shows the cache-read tokens on every step.
 
 **Refusals.** On models that support it the request opts into server-side refusal fallbacks. `stop_reason` is checked before content is used; a refusal that still comes back becomes a polite message, and a tool call cut off by `max_tokens` is never executed.
 
-**Cost per conversation.** Not measured yet: this build has no API key. An estimate from the prompt size (about 6,500 cached tokens) and published prices is roughly **10 to 15 cents on Claude Opus 5.5** for a full photo-to-paid-booking conversation of about ten model steps, and **under 1 cent on Claude Haiku 5.5**. The measured figure replaces this paragraph after the live verification step; X-ray mode reports the real cost of every turn.
+**Cost per conversation.** Measured against the live API on 16 November 2026. A full photo-to-paid-booking conversation (four customer turns, eight tool calls) cost **about 11 cents on Claude Opus 5.5** in the browser ($0.109 in X-ray; $0.114 for the same path in the eval suite) and **about half a cent on Claude Haiku 5.5** ($0.0055). The tools, instructions and documents come to about 14,000 tokens, and after the first request they are read from the cache on every step: 95% of the input tokens in that conversation were cache reads. The first conversation after the cache has gone cold pays a one-off write of about 7 cents on Opus. These figures are the token counts the API reported multiplied by the published prices in `src/lib/server/engine/cost.ts`, not an invoice; X-ray mode shows the same calculation for every turn.
 
 **Cost safety.** Server-side caps on messages per conversation, characters per message, total transcript size, photos per conversation, upload size, `max_tokens` and tool steps; a per-IP rate limit; same-origin JSON only, so another site cannot spend the budget through its visitors; and a global daily budget in both turns and estimated dollars, after which Penny drops to replay. Each cap produces a friendly "demo limit reached" message. With Upstash Redis configured, the rate limit and budget are shared across server instances; without it they are per instance, so **set a hard spend limit on the API key as well**: that is the real ceiling.
 
@@ -100,10 +100,10 @@ Key files:
 | Check | Result |
 |---|---|
 | `pnpm typecheck`, `pnpm lint`, `pnpm build` | Clean |
-| `pnpm test` (Vitest) | 93 tests: scheduling, pricing, documents, tools, replay scenarios, live engine against a stubbed SDK client, caps, rate limits, API routes, security regressions |
+| `pnpm test` (Vitest) | 120 tests: scheduling, pricing, documents, tools, replay scenarios, live engine against a stubbed SDK client, the citation safety net, caps, rate limits, API routes, security regressions |
 | `pnpm e2e` (Playwright) | 8 tests: golden path, emergency, citations, takeover, Spanish and reschedule, form recovery and pay-while-typing, mobile, reduced motion |
 | `pnpm eval:replay` | 14 of 14 cases, 65 of 65 checks (2 cases need the live model and are skipped) |
-| `pnpm eval` (live) | Not run yet: no API key. Exits cleanly with "no API key, skipped" |
+| `pnpm eval` (live) | Claude Opus 5.5: 16 of 16 cases, 74 of 74 checks, $0.41 for the suite. Claude Haiku 5.5: 16 of 16 cases, 74 of 74 checks, $0.015 for the suite. Run on 16 November 2026; results are in `evals/results/`. Model output varies, so re-run after changing the prompt, tools or documents |
 | `pnpm a11y` (axe-core, WCAG 2.1 A/AA) | No violations across 13 screens and states |
 | Lighthouse (production build, local) | 100 performance, 100 accessibility, 100 best practices, 100 SEO, on both desktop and mobile presets |
 | Reviews before shipping | Code review, independent security review ([findings and fixes](docs/security-review.md)), [accessibility audit](docs/accessibility-audit.md), and a fresh-eyes "try to break it" pass as a first-time client |

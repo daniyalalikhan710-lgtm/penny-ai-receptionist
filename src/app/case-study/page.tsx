@@ -2,20 +2,21 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, BookOpen, CalendarCheck, Camera, Languages, ScanSearch, ShieldAlert, UserRoundCheck } from "lucide-react";
-import { DOCS } from "@/lib/server/docs";
-import { SYSTEM_PROMPT } from "@/lib/server/engine/prompt";
-import { apiToolSpecs } from "@/lib/server/tools";
 
 export const metadata: Metadata = {
   title: "Case study · Penny, an AI receptionist for home-services businesses",
   description: "How Penny answers customers, diagnoses problems from a photo, quotes from the real price book and books the job, and what it would take to build one for your business.",
 };
 
-/** A rough size for the cached prompt prefix: about 4 characters per token. */
-function estimatePrefixTokens(): number {
-  const chars = SYSTEM_PROMPT.length + JSON.stringify(apiToolSpecs()).length + DOCS.reduce((n, d) => n + d.text.length + d.title.length, 0);
-  return Math.round(chars / 4 / 100) * 100;
-}
+/**
+ * Measured against the live API on 16 November 2026 (see docs/live-verification.md).
+ * Update these after re-running `pnpm eval` and a golden path in the browser.
+ */
+const MEASURED = {
+  prefixTokens: 14_000,
+  opus: "about 11 cents",
+  haiku: "about half a cent",
+};
 
 const FEATURES = [
   { icon: Camera, title: "Diagnoses from a photo", text: "A customer snaps the problem. Penny describes what she sees, how urgent it is, what to do right now, and the price range for the fix." },
@@ -125,7 +126,6 @@ function Diagram() {
 export default function CaseStudy() {
   const author = process.env.NEXT_PUBLIC_AUTHOR_NAME?.trim() ?? "";
   const hireUrl = process.env.NEXT_PUBLIC_HIRE_URL?.trim() ?? "";
-  const prefix = estimatePrefixTokens();
 
   return (
     <div className="min-h-dvh bg-cream text-ink-900">
@@ -221,22 +221,22 @@ export default function CaseStudy() {
             <ScanSearch className="size-7 text-copper-300" aria-hidden /> What a conversation costs
           </h2>
           <p className="mt-3 max-w-3xl text-[16px] leading-relaxed text-ink-200">
-            The instructions, tools and company documents add up to roughly {prefix.toLocaleString("en-US")} tokens. They are identical for every customer, so they are cached: after the first request they are billed at a small fraction of the normal rate, on every turn of every conversation.
+            The instructions, tools and company documents add up to about {MEASURED.prefixTokens.toLocaleString("en-US")} tokens. They are identical for every customer, so they are cached: after the first request they are billed at a small fraction of the normal rate, on every turn of every conversation.
           </p>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <div className="rounded-2xl bg-ink-800 p-5">
-              <p className="text-[12px] font-semibold tracking-[0.14em] text-copper-300 uppercase">Estimate · Claude Opus 5.5</p>
-              <p className="mt-2 font-display text-[32px] leading-none font-semibold">about 10 to 15 cents</p>
-              <p className="mt-2 text-[13.5px] leading-relaxed text-ink-300">for a full photo-to-paid-booking conversation of around ten model steps.</p>
+              <p className="text-[12px] font-semibold tracking-[0.14em] text-copper-300 uppercase">Measured · Claude Opus 5.5</p>
+              <p className="mt-2 font-display text-[32px] leading-none font-semibold">{MEASURED.opus}</p>
+              <p className="mt-2 text-[13.5px] leading-relaxed text-ink-300">for a full conversation: photo, diagnosis, estimate, booking, payment and confirmation.</p>
             </div>
             <div className="rounded-2xl bg-ink-800 p-5">
-              <p className="text-[12px] font-semibold tracking-[0.14em] text-copper-300 uppercase">Estimate · Claude Haiku 5.5</p>
-              <p className="mt-2 font-display text-[32px] leading-none font-semibold">under 1 cent</p>
+              <p className="text-[12px] font-semibold tracking-[0.14em] text-copper-300 uppercase">Measured · Claude Haiku 5.5</p>
+              <p className="mt-2 font-display text-[32px] leading-none font-semibold">{MEASURED.haiku}</p>
               <p className="mt-2 text-[13.5px] leading-relaxed text-ink-300">for the same conversation on the smaller model.</p>
             </div>
           </div>
           <p className="mt-5 max-w-3xl text-[13.5px] leading-relaxed text-ink-300">
-            These are estimates worked out from the prompt size and published API prices, not measurements. The demo&rsquo;s X-ray panel reports the real token counts and cost of every turn once it is running on a live API key, and the measured figures replace these in the project README.
+            Measured on 16 November 2026 against the live Claude API, with the shared instructions already in the cache: 95% of the input tokens in that conversation were cache reads. The figures are the token counts the API reported multiplied by published prices, and the demo&rsquo;s X-ray panel shows the same numbers for every turn.
           </p>
         </section>
 

@@ -70,13 +70,12 @@ export function foldEvent(turn: AssistantTurn, event: StreamEvent): { turn: Assi
       const parts = [...turn.parts];
       const last = parts[parts.length - 1];
       if (last && last.type === "text") {
-        const duplicate = last.citations.some(
-          (c) => c.docId === event.citation.docId && c.start === event.citation.start && c.at === last.text.length,
-        );
+        const at = Math.max(0, last.text.length - Math.max(0, event.back ?? 0));
+        const duplicate = last.citations.some((c) => c.docId === event.citation.docId && c.start === event.citation.start && c.at === at);
         if (!duplicate) {
           parts[parts.length - 1] = {
             ...last,
-            citations: [...last.citations, { ...event.citation, at: last.text.length }],
+            citations: [...last.citations, { ...event.citation, at }],
           };
         }
       } else {

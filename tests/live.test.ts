@@ -373,3 +373,38 @@ describe("background tools", () => {
     expect(second.requests).toHaveLength(2);
   });
 });
+
+describe("citation safety net", () => {
+  const uncited = "All our repairs come with a 2-year warranty on parts and labor. Is there something you need fixed?";
+  const note = { type: "tool_use", id: "toolu_note", name: "update_lead", input: { summary_en: "Asked about warranty.", intent: "question", urgency: "routine", customer_language: "en", customer_name: null } };
+
+  it("links an uncited policy sentence to the passage it rests on, right after that sentence", async () => {
+    const step: StubStep = {
+      stop_reason: "tool_use",
+      content: [{ type: "text", text: uncited, citations: null }, note],
+      events: [textDelta(0, uncited.slice(0, 30)), textDelta(0, uncited.slice(30)), blockStop(0)],
+    };
+    const { client } = stubClient([step]);
+    const { turn } = await run(config(client), input([user("What's your warranty?")]));
+    const citations = turnCitations(turn);
+    expect(citations).toHaveLength(1);
+    expect(citations[0]).toMatchObject({ docId: "warranty", matched: true });
+    expect(uncited.slice(0, citations[0].at)).toBe("All our repairs come with a 2-year warranty on parts and labor.");
+    const doc = DOCS.find((d) => d.id === "warranty");
+    expect(doc?.text.slice(citations[0].start, citations[0].end)).toBe(citations[0].quote);
+  });
+
+  it("stays out of the way when the model cited the documents itself", async () => {
+    const { client } = stubClient([toolStep, answerStep]);
+    const { turn } = await run(config(client), input([user("How much is drain clearing?")]));
+    expect(turnCitations(turn).length).toBeGreaterThan(0);
+    expect(turnCitations(turn).some((c) => c.matched)).toBe(false);
+  });
+
+  it("does not guess during a booking turn, where cards carry the facts", async () => {
+    const afterTool: StubStep = { stop_reason: "end_turn", content: [{ type: "text", text: uncited, citations: null }], events: [textDelta(0, uncited), blockStop(0)] };
+    const { client } = stubClient([toolStep, afterTool]);
+    const { turn } = await run(config(client), input([user("How much is drain clearing?")]));
+    expect(turnCitations(turn)).toEqual([]);
+  });
+});

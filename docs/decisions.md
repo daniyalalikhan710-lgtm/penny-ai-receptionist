@@ -30,3 +30,15 @@ One line each, with the reason. Made while building unattended (brief §0).
 - **View switcher and day picker are toggle buttons, not ARIA tabs.** They have no tab panels and no arrow-key model, so `aria-pressed` describes them honestly.
 - **The `security-review` skill could not run before the first push** (it diffs against `origin/HEAD`, which does not exist until the repo has a remote). An independent reviewer audited the same checklist instead; its findings are recorded with the fixes in the commit history.
 - **No guided tour.** The first suggested prompt is marked "Start here" and each pane is labelled; a modal tour would sit between the visitor and the one thing they should click. Listed under Roadmap.
+
+## Made during live verification (2026-11-16)
+
+- **A reply written alongside only the inbox note ends the turn.** `update_lead` is a background note the customer never waits on. Sending its result back to the model cost a second round trip and tempted it to repeat itself, so the loop stops there; the note's result is replayed in the next turn's history.
+- **`ANTHROPIC_WORKSPACE_ID` is supported.** A key that is not scoped to one workspace is rejected by the API unless the request names the workspace; the variable adds that header. Workspace-scoped keys do not need it.
+- **A live eval that silently fell back to replay counts as an error.** Otherwise a rejected key would report 16 of 16 without calling the model once.
+- **The prompt tells Penny she is the front desk, not the diagnostician.** Left alone, the model asked follow-up questions about symptoms before offering a time. Naming the equipment and wanting it fixed is enough to show an estimate and open slots.
+- **The prompt says everything written before a tool call is shown to the customer.** The model otherwise wrote working notes there ("Tomorrow is 2026-11-17.").
+- **A server-side safety net for citations (`src/lib/server/grounding.ts`).** The model sometimes gives a correct policy answer and leaves the citation off: 3 of 8 policy answers in one probe, and stronger prompt wording did not change that. When a question-and-answer reply arrives with no citations, the server matches each sentence to the document sentence it rests on and links it. It is word matching with rare words weighted up, it refuses a match when the reply contains a figure the document sentence does not, and it links nothing below a threshold set from real replies. It is skipped in booking turns (the cards carry the facts there), it only understands English, and X-ray labels its links "matched by the server". Chosen over a second model call because it is free, instant and deterministic.
+- **A citation chip follows the sentence's closing punctuation.** The API often places a citation just before the full stop; the chat moves the punctuation in front of the chip.
+- **The typing indicator says "Looking at your photo…" on a photo turn.** That turn takes several seconds before the first word arrives.
+

@@ -1,6 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { CitationView } from "@/lib/domain/types";
+import { attributeReply } from "../grounding";
 import { DOCS } from "../docs";
 import { CAPS } from "../limits";
 import { apiToolSpecs } from "../tools";
@@ -130,6 +131,9 @@ export function createLiveEngine(config: LiveConfig): Engine {
       const ctx = toolContextFor(input);
       const messages: MessageParam[] = buildMessages(input);
       let emittedAnything = false;
+      // True until a tool other than the background note is used: a plain
+      // question-and-answer turn, which is where source links matter most.
+      let plainAnswer = true;
 
       for (let step = 1; step <= config.maxSteps; step++) {
         const started = performance.now();
@@ -149,6 +153,8 @@ export function createLiveEngine(config: LiveConfig): Engine {
         };
 
         let message: BetaMessage;
+        let stepText = "";
+        let cited = false;
         try {
           const stream = config.client.beta.messages.stream(params, { signal: options?.signal });
           const pending = new Map<number, CitationView[]>();
@@ -156,6 +162,7 @@ export function createLiveEngine(config: LiveConfig): Engine {
             if (event.type === "content_block_delta") {
               if (event.delta.type === "text_delta") {
                 emittedAnything = true;
+                stepText += event.delta.text;
                 emit({ type: "text", text: event.delta.text });
               } else if (event.delta.type === "citations_delta") {
                 const citation = toCitation(event.delta.citation);
@@ -163,7 +170,10 @@ export function createLiveEngine(config: LiveConfig): Engine {
               }
             } else if (event.type === "content_block_stop") {
               // Emitted after the block's text, so the chip lands behind the claim.
-              for (const citation of pending.get(event.index) ?? []) emit({ type: "citation", citation });
+              for (const citation of pending.get(event.index) ?? []) {
+                cited = true;
+                emit({ type: "citation", citation });
+              }
               pending.delete(event.index);
             }
           }
@@ -210,6 +220,17 @@ export function createLiveEngine(config: LiveConfig): Engine {
         }
 
         const toolUses = message.content.filter((block): block is BetaToolUseBlock => block.type === "tool_use");
+        if (toolUses.some((use) => !BACKGROUND_TOOLS.has(use.name))) plainAnswer = false;
+
+        // Safety net: the model usually cites the documents itself, but now and
+        // then it answers a policy question correctly and leaves the citation
+        // off. Find the passage each sentence rests on and link it, placed just
+        // after that sentence. Sent before any tool event, so the text it
+        // refers to is still the last thing in the reply.
+        if (plainAnswer && !cited && stepText.trim()) {
+          for (const { at, citation } of attributeReply(stepText)) emit({ type: "citation", citation, back: stepText.length - at });
+        }
+
         if (toolUses.length === 0) return { stopReason: message.stop_reason ?? "end_turn" };
 
         if (message.stop_reason === "max_tokens") {
